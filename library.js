@@ -741,24 +741,28 @@ function checkCat (name, organisationId, type, identifier) {
       .then(getData => {
         let finalArray = [],
           data = true
-        delete getData.type
-        delete getData.batch_id
-        let convertObjToArr = Object.values(getData)
-        convertObjToArr.map(val => {
-          if (
-            val.tenant_id == organisationId &&
-            val.batch == type + identifier
-          ) {
-            finalArray.push(val)
-          }
-        })
-        finalArray.map(val => {
-          if (val.name == name) {
-            data = false
-          }
-        })
-        console.log('-------------data ------------', data)
-        return resolve(data)
+        if (getData) {
+          delete getData.type
+          delete getData.batch_id
+          let convertObjToArr = Object.values(getData)
+          convertObjToArr.map(val => {
+            if (
+              val.tenant_id == organisationId &&
+              val.batch == type + identifier
+            ) {
+              finalArray.push(val)
+            }
+          })
+          finalArray.map(val => {
+            if (val.name == name) {
+              data = false
+            }
+          })
+          console.log('-------------data ------------', data)
+          return resolve(data)
+        } else {
+          return resolve(data)
+        }
       })
       .catch(error => {
         console.log(error)
