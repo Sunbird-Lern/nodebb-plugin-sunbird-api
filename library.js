@@ -3,9 +3,47 @@ var Privilegs = require.main.require('./src/privileges')
 var Groups = require.main.require('./src/groups')
 var db = require.main.require('./src/database')
 var Users = require.main.require('./src/user')
+const Topics = require.main.require('./src/topics')
 var async = require('async')
 var _ = require('lodash')
 const { v4: uuidv4 } = require('uuid')
+
+async function createTopic (payload) {
+  return new Promise(function (resolve, reject) {
+    Topics.post(payload)
+      .then(topicObj => {
+        return resolve(topicObj)
+      })
+      .catch(error => {
+        console.log(
+          '------------ Error in creating topic. ------------------',
+          error
+        )
+        return reject({
+          status: 400,
+          message: 'Error in creating topic.',
+          error: error
+        })
+      })
+  })
+}
+
+async function replyTopic (payload) {
+  return new Promise(function (resolve, reject) {
+    Topics.reply(payload)
+      .then(topicObj => {
+        return resolve(topicObj)
+      })
+      .catch(error => {
+        console.log('------------ Error in replying topic ------------', error)
+        return reject({
+          status: 400,
+          message: 'Error in replying the topic.',
+          error: error
+        })
+      })
+  })
+}
 
 function createCategory (body) {
   const tenantId = body.organisationId
@@ -781,5 +819,7 @@ module.exports = {
   addSection,
   createForum,
   createGroup,
-  getForum
+  getForum,
+  createTopic,
+  replyTopic
 }
