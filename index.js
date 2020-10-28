@@ -1,35 +1,30 @@
 var Plugin = (module.exports = {})
-var Categories = require.main.require('./src/categories')
-var Groups = require.main.require('./src/groups')
-var db = require.main.require('./src/database')
-// var Users = require.main.require('./src/user')
-var async = require('async')
-var apiMiddleware = require('./middleware')
-var responseMessage = require('./responseHandler')
-var createTenantURL = '/api/org/v1/setup'
-var createForumURL = '/api/forum/v1/create'
-var createSectionURL = '/api/org/v1/sections/add'
-var getForumURL = '/api/forum/v1/read'
-
-var Plugin = (module.exports = {})
+const Categories = require.main.require('./src/categories')
 const posts = require.main.require('./src/posts')
 const Topics = require.main.require('./src/topics')
 const Users = require.main.require('./src/user')
+const Groups = require.main.require('./src/groups')
+const db = require.main.require('./src/database')
+const async = require('async')
+const apiMiddleware = require('./middleware')
+const responseMessage = require('./responseHandler')
+const createTenantURL = '/api/org/v1/setup'
+const createForumURL = '/api/forum/v1/create'
+const createSectionURL = '/api/org/v1/sections/add'
+const getForumURL = '/api/forum/v1/read'
 
-var utils = require('./utils')
-var apiMiddleware = require('./middleware')
-var responseMessage = require('./responseHandler')
-var replyTopicURL = '/api/topic/v1/reply'
-var createTopicURL = '/api/topic/v1/create'
-var voteURL = '/api/:pid/vote'
-var deletePostURL = '/api/post/v1/delete/:pid'
-var deleteTopicURL = '/api/topic/v1/delete/:tid'
-var purgePostURL = '/api/post/v1/purge/:pid'
-var purgeTopicURL = '/api/topic/v1/purge/:tid'
-var banUserURL = '/api/user/v1/ban'
-var unbanUserURL = '/api/user/v1/unban'
+const utils = require('./utils')
+const replyTopicURL = '/api/topic/v1/reply'
+const createTopicURL = '/api/topic/v1/create'
+const voteURL = '/api/:pid/vote'
+const deletePostURL = '/api/post/v1/delete/:pid'
+const deleteTopicURL = '/api/topic/v1/delete/:tid'
+const purgePostURL = '/api/post/v1/purge/:pid'
+const purgeTopicURL = '/api/topic/v1/purge/:tid'
+const banUserURL = '/api/user/v1/ban'
+const unbanUserURL = '/api/user/v1/unban'
 
-var {
+const {
   createCategory,
   addPrivileges,
   addSection,
@@ -41,7 +36,6 @@ var {
 } = require('./library')
 
 async function createTopicAPI (req, res) {
-  console.log('------------ api.discussions.topic.create----------', req.body)
   var payload = { ...req.body.request }
   payload.tags = payload.tags || []
   payload.uid = req.user.uid
@@ -71,8 +65,6 @@ async function createTopicAPI (req, res) {
 }
 
 async function replyTopicAPI (req, res) {
-  console.log('------------ api.discussions.topic.reply----------', req.body)
-
   let { body } = req
 
   var payload = {
@@ -112,10 +104,7 @@ async function replyTopicAPI (req, res) {
 }
 
 async function deletePostAPI (req, res) {
-  console.log('------------ api.discussions.delete.post----------', req.body)
-
   let { body } = req
-  console.log(req.params.pid)
   posts.delete(req.params.pid, req.user.uid, function (error) {
     if (error) {
       let resObj = {
@@ -140,8 +129,6 @@ async function deletePostAPI (req, res) {
 }
 
 async function deleteTopicAPI (req, res) {
-  console.log('------------ api.discussions.delete.topic----------', req.body)
-  console.log(req.params.tid, 'req.params._uid ---------', req.params._uid)
   Topics.delete(req.params.tid, req.params._uid, function (error) {
     if (error) {
       let resObj = {
@@ -166,8 +153,6 @@ async function deleteTopicAPI (req, res) {
 }
 
 async function purgeTopicAPI (req, res) {
-  console.log('------------ api.discussions.purge.topic----------', req.body)
-  console.log(req.params.tid, 'req.params._uid ---------', req.params._uid)
   Topics.purgePostsAndTopic(req.params.tid, req.params._uid, function (error) {
     if (error) {
       let resObj = {
@@ -192,8 +177,6 @@ async function purgeTopicAPI (req, res) {
 }
 
 async function purgePostAPI (req, res) {
-  console.log('------------ api.discussions.purge.post----------', req.body)
-  console.log(req.params.pid)
   posts.purge(req.params.pid, req.user.uid, function (error) {
     if (error) {
       let resObj = {
@@ -218,13 +201,10 @@ async function purgePostAPI (req, res) {
 }
 
 async function voteURLAPI (req, res) {
-  console.log('------------ api.discussions.post.vote----------', req.body)
-
   let { body } = req
 
   if (body.request.delta > 0) {
     posts.upvote(req.params.pid, req.user.uid, function (error, data) {
-      console.log(error, '--------error-----------')
       if (error) {
         let resObj = {
           id: 'api.discussions.post.vote',
@@ -247,7 +227,6 @@ async function voteURLAPI (req, res) {
     })
   } else if (body.request.delta < 0) {
     posts.downvote(req.params.pid, req.user.uid, function (error, data) {
-      console.log(error, '--------error-----------')
       if (error) {
         let resObj = {
           id: 'api.discussions.post.vote',
@@ -270,7 +249,6 @@ async function voteURLAPI (req, res) {
     })
   } else {
     posts.unvote(req.params.pid, req.user.uid, function (error, data) {
-      console.log(error, '--------error-----------')
       if (error) {
         let resObj = {
           id: 'api.discussions.post.vote',
@@ -295,8 +273,6 @@ async function voteURLAPI (req, res) {
 }
 
 async function banUserAPI (req, res) {
-  console.log('------------ api.discussions.user.ban----------', req.body)
-
   let { body } = req
 
   Users.bans.ban(
@@ -328,8 +304,6 @@ async function banUserAPI (req, res) {
 }
 
 async function unbanUserAPI (req, res) {
-  console.log('------------ api.discussions.user.ban----------', req.body)
-
   let { body } = req
 
   Users.bans.unban(body.request.uid, function (error) {
@@ -356,7 +330,6 @@ async function unbanUserAPI (req, res) {
 }
 
 async function setupOrgAPI (req, res) {
-  console.log('------------ cretae teant ----------', req.body)
   let { body } = req
   var reqPrivileges = body.request.privileges
   return createCategory(body.request)
@@ -369,10 +342,6 @@ async function setupOrgAPI (req, res) {
         allCatIds.push(catResponse.categoryObj.cid)
         return addPrivileges(reqPrivileges, allCatIds)
           .then(privilegesResponse => {
-            console.log(
-              '---------privilegesResponse00 -----------',
-              privilegesResponse
-            )
             let resObj = {
               id: 'api.discussions.org.setup',
               msgId: req.body.params.msgid,
@@ -409,17 +378,14 @@ async function setupOrgAPI (req, res) {
 }
 
 async function addSectionURL (req, res) {
-  console.log('------------ /api/org/v1/sections/add ----------', req.body)
   let { body } = req
   var reqPrivileges = body.request.privileges
   return addSection(body.request)
     .then(catResponse => {
-      console.log('------catResponse-----', catResponse)
       let allCatIds = []
       catResponse.sectionObj.map(section => {
         allCatIds.push(section.cid)
       })
-      console.log(allCatIds, '>>>>>>>>>>>>>>>>>>>>>>>')
       return addPrivileges(reqPrivileges, allCatIds)
         .then(privilegesResponse => {
           let resObj = {
@@ -457,7 +423,6 @@ async function addSectionURL (req, res) {
 }
 
 async function createForumAPI (req, res) {
-  console.log('------------ api.discussions.forum.create----------', req.body)
   let { body } = req
   var reqPrivileges = body.request.privileges
 
@@ -479,7 +444,6 @@ async function createForumAPI (req, res) {
         if (body.request.groups && body.request.privileges) {
           return createGroup(body.request, allCatIds)
             .then(groupObj => {
-              console.log('------groupObj-----', groupObj)
               return addPrivileges(reqPrivileges, allCatIds)
                 .then(privilegesResponse => {
                   let resObj = {
@@ -517,7 +481,6 @@ async function createForumAPI (req, res) {
         } else if (body.request.groups && !body.request.privileges) {
           return createGroup(body.request, allCatIds)
             .then(groupObj => {
-              console.log('------groupObj-----', groupObj)
               let resObj = {
                 id: 'api.discussions.forum.create',
                 msgId: req.body.params.msgid,
@@ -587,11 +550,9 @@ async function createForumAPI (req, res) {
 }
 
 async function getForumAPI (req, res) {
-  console.log('------------ api.discussions.forum.read----------', req.body)
   let { body } = req
   return getForum(body.request)
     .then(forumResponse => {
-      console.log('-------------forumResponse', forumResponse)
       let resObj = {
         id: 'api.discussions.forum.read',
         msgId: req.body.params.msgid,

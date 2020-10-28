@@ -25,14 +25,6 @@ const Middleware = {
 Middleware.requireUser = async function (req, res, next) {
   var routeMatch
 
-  // await plugins.fireHook('response:plugin.write-api.authenticate', {
-  // 	req: req,
-  // 	res: res,
-  // 	next: function () {},	// noop for backwards compatibility purposes
-  // 	utils: utils,
-  // 	errorHandler: errorHandler,
-  // });
-
   // If plugins handle the response, stop default actions
   if (res.headersSent) {
     return
@@ -40,10 +32,6 @@ Middleware.requireUser = async function (req, res, next) {
 
   if (req.headers.hasOwnProperty('authorization')) {
     passport.authenticate('bearer', { session: false }, function (err, user) {
-      console.log(
-        '-------------- line - 44 , user response -----------------',
-        user
-      )
       if (err) {
         return next(err)
       }
@@ -63,11 +51,6 @@ Middleware.requireUser = async function (req, res, next) {
           next()
         })
       } else if (user.hasOwnProperty('master') && user.master === true) {
-        // if (
-        //   req.body.hasOwnProperty('_uid') ||
-        //   req.query.hasOwnProperty('_uid')
-        // )
-        // {
         user.uid = req.body._uid || req.query._uid || 1
         delete user.master
 
@@ -80,18 +63,6 @@ Middleware.requireUser = async function (req, res, next) {
           req.loggedIn = req.uid > 0
           next()
         })
-        // } else {
-        //   res
-        //     .status(400)
-        //     .json(
-        //       errorHandler.generate(
-        //         400,
-        //         'params-missing',
-        //         'Required parameters were missing from this API call, please see the "params" property',
-        //         ['_uid']
-        //       )
-        //     )
-        // }
       } else {
         return errorHandler.respond(500, res)
       }

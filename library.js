@@ -15,10 +15,6 @@ async function createTopic (payload) {
         return resolve(topicObj)
       })
       .catch(error => {
-        console.log(
-          '------------ Error in creating topic. ------------------',
-          error
-        )
         return reject({
           status: 400,
           message: 'Error in creating topic.',
@@ -35,7 +31,6 @@ async function replyTopic (payload) {
         return resolve(topicObj)
       })
       .catch(error => {
-        console.log('------------ Error in replying topic ------------', error)
         return reject({
           status: 400,
           message: 'Error in replying the topic.',
@@ -48,7 +43,6 @@ async function replyTopic (payload) {
 function createCategory (body) {
   const tenantId = body.organisationId
   const sections = body.sections
-  console.log('-------sections length----------', typeof sections, sections)
   let sectionArray = [],
     sectionObj = {},
     mappingTenant = null,
@@ -57,7 +51,6 @@ function createCategory (body) {
   return new Promise(function (resolve, reject) {
     db.getObject(`tenant_cat_map:` + tenantId)
       .then(tenentObj => {
-        console.log(tenentObj, '----------------------------')
         if (tenentObj) {
           existedCatId = tenentObj.tenant_id
           existedCatName = tenentObj.name
@@ -128,7 +121,6 @@ function createCategory (body) {
               }
             })
             .catch(err => {
-              console.log('>>>>>>>> err in inserting category >>>', err)
               return reject({
                 status: 400,
                 message: 'Error in inserting category',
@@ -138,7 +130,6 @@ function createCategory (body) {
         }
       })
       .catch(err => {
-        console.log('>>>>>>> find tenent id error <<<<<<<<', err)
         return reject({
           status: 400,
           message: 'Error in finding tenant id',
@@ -160,7 +151,6 @@ function createForum (body) {
   return new Promise(function (resolve, reject) {
     db.getObject(`tenant_cat_map:` + tenantId)
       .then(tenentObj => {
-        console.log(tenentObj, '----------------------------')
         if (tenentObj) {
           if (!sectionType) {
             pID = tenentObj && tenentObj.cat_id ? tenentObj.cat_id : ''
@@ -177,13 +167,11 @@ function createForum (body) {
           }
           return checkCat(catName, tenantId, contextType, identifier)
             .then(data => {
-              console.log(data, '------------------------------')
               if (data == true) {
                 Categories.create(reqData)
                   .then(categoryObj => {
                     db.getObject(`batchid_catid_map:` + identifier)
                       .then(batchData => {
-                        console.log(batchData, '-----------------------')
                         if (batchData) {
                           jsonObj = {
                             ...batchData,
@@ -206,7 +194,6 @@ function createForum (body) {
                             }
                           }
                         }
-                        console.log(jsonObj)
                         let mapping = mappingFunction(
                           `batchid_catid_map:${identifier}`,
                           jsonObj
@@ -227,7 +214,6 @@ function createForum (body) {
                       .catch(error => {})
                   })
                   .catch(err => {
-                    console.log('>>>>>>>> err in creating forum >>>', err)
                     return reject({
                       status: 400,
                       message: 'Error in creating forum',
@@ -242,7 +228,6 @@ function createForum (body) {
               }
             })
             .catch(error => {
-              console.log(error)
               return reject(error)
             })
         } else {
@@ -254,7 +239,6 @@ function createForum (body) {
         }
       })
       .catch(err => {
-        console.log('>>>>>>> find tenent id error <<<<<<<<', err)
         return reject({
           status: 400,
           message: 'Error in finding tenant id',
@@ -310,7 +294,6 @@ function commonAddSection (cname, sections, cid, tenantId) {
             }
           })
           .catch(err => {
-            console.log(err, 'error in inserting sectionb --------------------')
             return reject({
               status: 400,
               message: 'Error in inserting sections.',
@@ -330,7 +313,6 @@ function addSection (body) {
   return new Promise(function (resolve, reject) {
     db.getObject(`tenant_cat_map:` + tenantId)
       .then(tenentObj => {
-        console.log(tenentObj, '----------------------------')
         let pID = tenentObj && tenentObj.cat_id ? tenentObj.cat_id : ''
 
         if (sections.length > 0) {
@@ -347,7 +329,6 @@ function addSection (body) {
         }
       })
       .catch(error => {
-        console.log('>>>>>>> find tenent id error <<<<<<<<', err)
         return reject({
           status: 400,
           message: 'Error in finding tenant id',
@@ -372,24 +353,18 @@ function addPrivileges (reqPrivileges, catIds) {
   return new Promise(function (resolve, reject) {
     return removeuserPreviliges(catIds)
       .then(res => {
-        console.log('-------removeuserPreviliges response-----------', res)
         reqPrivileges.map((privilege, index) => {
           let permissions = privilege.permissions
           let users = privilege.users
           let groups = privilege.groups
           groups.map(group => {
-            console.log('---------------group nameeeee--------', group)
             return addGroupIntoCategory(group, permissions, catIds)
               .then(res => {
                 array.push(res)
                 return addUserIntoGroup(group, users, permissions, catIds)
                   .then(response => {
                     preArray.push(response)
-                    console.log(
-                      '------------reqPrivileges.length === preArray.length----------',
-                      reqPrivileges.length,
-                      preArray.length
-                    )
+                   
                     if (reqPrivileges.length === preArray.length)
                       return resolve(response)
                   })
@@ -402,10 +377,6 @@ function addPrivileges (reqPrivileges, catIds) {
                   })
               })
               .catch(error => {
-                console.log(
-                  error,
-                  '------Error in adding privileges into category---------'
-                )
                 return reject({
                   status: 400,
                   message: 'Error in adding privileges into category',
@@ -448,7 +419,6 @@ function createGroup (body, catIds) {
                 }
               })
               .catch(error => {
-                console.log(error, '-----------error-----------')
                 return reject({
                   status: 400,
                   message: 'Error in adding group into category',
@@ -458,7 +428,6 @@ function createGroup (body, catIds) {
           }
         })
         .catch(err => {
-          console.log('------ group craete error-------', err)
           return reject({
             status: 400,
             message: 'Error in inserting groups/ Already exist',
@@ -470,7 +439,6 @@ function createGroup (body, catIds) {
 }
 
 async function addGroupIntoCategory (group, permissions, catIds) {
-  console.log('------------ addGroupIntoCatrgory catIds ---------', catIds)
   return new Promise(function (resolve, reject) {
     let groups = [group]
     let finalPrivileges = null
@@ -478,7 +446,6 @@ async function addGroupIntoCategory (group, permissions, catIds) {
       finalPrivileges = privilegesHirerchy(permission, 'group')
     })
     finalPrivileges = _.uniq(finalPrivileges)
-    console.log(finalPrivileges, '----------------finalPrivileges----')
     let arrData = []
 
     catIds.map(id => {
@@ -499,7 +466,6 @@ async function addGroupIntoCategory (group, permissions, catIds) {
 }
 
 async function addUserIntoGroup (groupName, users, permissions, catIds) {
-  console.log('------coming addUserIntoGroup--------------- ', users)
   return new Promise(function (resolve, reject) {
     if (users && users.length > 0) {
       users.map(sunbirdAuthId => {
@@ -528,7 +494,7 @@ async function addUserIntoGroup (groupName, users, permissions, catIds) {
               })
           } else {
             console.log(
-              '---------- no user id found ---------------',
+              '---------- no user id found -----------',
               sunbirdAuthId
             )
           }
@@ -550,7 +516,6 @@ function addUserPreviliges (uid, permissions, catIds) {
       finalPrivileges = privilegesHirerchy(permission, 'user')
     })
     finalPrivileges = _.uniq(finalPrivileges)
-    console.log(finalPrivileges, '----------------finalPrivileges----')
 
     catIds.map(id => {
       changeGroupMembership(id, finalPrivileges, groups, 'join')
@@ -652,7 +617,6 @@ async function getUserIdFromOauthId (sunbirdId) {
 }
 
 function privilegesHirerchy (privilegs, type) {
-  console.log('--------------privilegs-----------', privilegs)
   let readPriviliges =
     type === 'user'
       ? ['topics:read', 'read', 'find']
@@ -728,7 +692,6 @@ function getForum (body) {
       .then(getData => {
         let finalArray = [],
           totalArr = []
-        console.log('--------------response ----------', getData)
         delete getData.type
         delete getData.batch_id
         let convertObjToArr = Object.values(getData)
@@ -741,14 +704,12 @@ function getForum (body) {
             Privilegs.categories
               .list(val.cat_id)
               .then(allGroups => {
-                // console.log('------allGroups------', allGroups.groups)
                 finalArray.push({
                   categoryId: val.cat_id,
                   name: val.name,
                   groups: allGroups.groups
                 })
                 if (finalArray.length == totalArr.length) {
-                  console.log(finalArray)
                   return resolve(finalArray)
                 }
               })
@@ -763,7 +724,6 @@ function getForum (body) {
         })
       })
       .catch(error => {
-        console.log(error)
         return reject({
           status: 400,
           message: 'Error in fetching forum',
@@ -796,14 +756,12 @@ function checkCat (name, organisationId, type, identifier) {
               data = false
             }
           })
-          console.log('-------------data ------------', data)
           return resolve(data)
         } else {
           return resolve(data)
         }
       })
       .catch(error => {
-        console.log(error)
         return reject({
           status: 400,
           message: 'Error in fetching forum',
