@@ -1,4 +1,5 @@
 var Plugin = (module.exports = {})
+const axios = require('axios')
 const Categories = require.main.require('./src/categories')
 const posts = require.main.require('./src/posts')
 const Topics = require.main.require('./src/topics')
@@ -14,6 +15,8 @@ const createSectionURL = '/api/org/v1/sections/add'
 const getForumURL = '/api/forum/v1/read'
 
 const utils = require('./utils')
+const allTopicsByCategoryURL = '/api/category/v1/topic'
+const allPostsByTopicURL = '/api/topic/v1/posts'
 const replyTopicURL = '/api/topic/v1/reply'
 const createTopicURL = '/api/topic/v1/create'
 const voteURL = '/api/:pid/vote'
@@ -35,6 +38,8 @@ const {
   replyTopic
 } = require('./library')
 
+const { default: Axios } = require('axios')
+
 async function createTopicAPI (req, res) {
   var payload = { ...req.body.request }
   payload.tags = payload.tags || []
@@ -54,6 +59,65 @@ async function createTopicAPI (req, res) {
     .catch(error => {
       let resObj = {
         id: 'api.discussions.topic.create',
+        msgId: req.body.params.msgid,
+        status: 'failed',
+        resCode: 'SERVER_ERROR',
+        err: error.status,
+        errmsg: error.message
+      }
+      return res.json(responseMessage.errorResponse(resObj))
+    })
+}
+
+async function allTopicsByCategory (req, res) {
+  var payload = { ...req.body.request }
+
+  axios
+    .get(`http://localhost:4567/api/category/${payload.cid}`)
+    .then(topicObj => {
+
+      let resObj = {
+        id: 'api.discussions.topic.all',
+        msgId: req.body.params.msgid,
+        status: 'successful',
+        resCode: 'OK',
+        data: topicObj.data
+      }
+      return res.json(responseMessage.successResponse(resObj))
+    })
+    .catch(error => {
+      console.log(error)
+      let resObj = {
+        id: 'api.discussions.topic.all',
+        msgId: req.body.params.msgid,
+        status: 'failed',
+        resCode: 'SERVER_ERROR',
+        err: error.status,
+        errmsg: error.message
+      }
+      return res.json(responseMessage.errorResponse(resObj))
+    })
+}
+
+async function allPostsByTopic (req, res) {
+  var payload = { ...req.body.request }
+console.log('--------------------',payload)
+  axios
+    .get(`http://localhost:4567/api/topic/${payload.tid}`)
+    .then(postObj => {
+      // console.log('--------------------',postObj)
+      let resObj = {
+        id: 'api.discussions.reply.all',
+        msgId: req.body.params.msgid,
+        status: 'successful',
+        resCode: 'OK',
+        data: postObj.data
+      }
+      return res.json(responseMessage.successResponse(resObj))
+    })
+    .catch(error => {
+      let resObj = {
+        id: 'api.discussions.reply.all',
         msgId: req.body.params.msgid,
         status: 'failed',
         resCode: 'SERVER_ERROR',
@@ -607,6 +671,18 @@ Plugin.load = function (params, callback) {
     apiMiddleware.requireUser,
     apiMiddleware.requireAdmin,
     createForumAPI
+  )
+  router.post(
+    allTopicsByCategoryURL,
+    apiMiddleware.requireUser,
+    apiMiddleware.requireAdmin,
+    allTopicsByCategory
+  )
+  router.post(
+    allPostsByTopicURL,
+    apiMiddleware.requireUser,
+    apiMiddleware.requireAdmin,
+    allPostsByTopic
   )
   router.post(
     getForumURL,

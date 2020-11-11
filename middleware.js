@@ -51,7 +51,7 @@ Middleware.requireUser = async function (req, res, next) {
           next()
         })
       } else if (user.hasOwnProperty('master') && user.master === true) {
-        user.uid = req.body._uid || req.query._uid || 1
+        user.uid = req.body.request._uid || req.query._uid || 1
         delete user.master
 
         req.login(user, function (err) {
