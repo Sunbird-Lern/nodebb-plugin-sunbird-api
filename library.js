@@ -139,6 +139,55 @@ function createCategory (body) {
   })
 }
 
+function createCategory_check (body) {
+  // const tenantId = body.organisationId
+  const sections = body.sections || ['General discussion', 'Annoucement']
+  let sectionArray = []
+  return new Promise(function (resolve, reject) {
+    const reqData = {
+      name: body.name,
+      isSection: 1
+    }
+    Categories.create(reqData)
+      .then(categoryObj => {
+        sections.map((secName, inx) => {
+          let name = secName.replace(/\s+/g, '-').toLowerCase()
+          const bodyData = {
+            name: secName,
+            description: 'course batch',
+            parentCid: categoryObj.cid,
+            isSection: 1
+          }
+          Categories.create(bodyData)
+            .then(catData => {
+              sectionArray.push(catData)
+              if (sections.length == sectionArray.length) {
+                let response = {
+                  categoryObj: categoryObj,
+                  sectionObj: sectionArray
+                }
+                return resolve(response)
+              }
+            })
+            .catch(err => {
+              return reject({
+                status: 400,
+                message: 'Error in inserting sections.',
+                error: err
+              })
+            })
+        })
+      })
+      .catch(err => {
+        return reject({
+          status: 400,
+          message: 'Error in inserting category',
+          error: err
+        })
+      })
+  })
+}
+
 function createForum (body) {
   const tenantId = body.organisationId
   let sectionType = body.section
@@ -364,7 +413,7 @@ function addPrivileges (reqPrivileges, catIds) {
                 return addUserIntoGroup(group, users, permissions, catIds)
                   .then(response => {
                     preArray.push(response)
-                   
+
                     if (reqPrivileges.length === preArray.length)
                       return resolve(response)
                   })
@@ -438,6 +487,81 @@ function createGroup (body, catIds) {
   })
 }
 
+function createGroupDefault (body, uid, catIds) {
+  return new Promise(function (resolve, reject) {
+    let array = [],
+      preArray = []
+    let groups = [
+      { name: `${body.name}-members`, permissions: ['read'] },
+      {
+        name: `${body.name}-moderators`,
+        permissions: ['read', 'vote', 'post', 'topic', 'moderate'],
+        users: [uid]
+      }
+    ]
+
+    return removeuserPreviliges(catIds)
+      .then(res => {
+        console.log('res-------------', res)
+        groups.map((group, inx) => {
+          Groups.create({ name: group.name, private: 1 })
+            .then(groupObj => {
+              if (groupObj) {
+                return addGroupIntoCategory(
+                  group.name,
+                  group.permissions,
+                  catIds
+                )
+                  .then(res => {
+                    array.push(res)
+                    return addUserIntoGroup_new(
+                      group.name,
+                      group.users,
+                      group.permissions,
+                      catIds
+                    )
+                      .then(response => {
+                        preArray.push(response)
+
+                        if (groups.length === preArray.length)
+                          return resolve(response)
+                      })
+                      .catch(error => {
+                        return reject({
+                          status: 400,
+                          message: 'Error in adding users into category',
+                          error: error
+                        })
+                      })
+                  })
+                  .catch(error => {
+                    return reject({
+                      status: 400,
+                      message: 'Error in adding group into category',
+                      error: error
+                    })
+                  })
+              }
+            })
+            .catch(err => {
+              return reject({
+                status: 400,
+                message: 'Error in inserting groups/ Already exist',
+                error: err
+              })
+            })
+        })
+      })
+      .catch(error => {
+        return reject({
+          status: 400,
+          message: 'Error in removing privileges from group into category',
+          error: error
+        })
+      })
+  })
+}
+
 async function addGroupIntoCategory (group, permissions, catIds) {
   return new Promise(function (resolve, reject) {
     let groups = [group]
@@ -499,6 +623,39 @@ async function addUserIntoGroup (groupName, users, permissions, catIds) {
             )
           }
         })
+      })
+    } else {
+      console.log('no id found---------------------')
+      return resolve(true)
+    }
+  })
+}
+
+async function addUserIntoGroup_new (groupName, users, permissions, catIds) {
+  return new Promise(function (resolve, reject) {
+    if (users && users.length > 0) {
+      users.map(uid => {
+        Groups.join(groupName, uid)
+          .then(data => {
+            return addUserPreviliges(uid, permissions, catIds)
+              .then(res => {
+                return resolve(res)
+              })
+              .catch(err => {
+                return reject({
+                  status: 400,
+                  message: 'Error in adding user previliges',
+                  error: err
+                })
+              })
+          })
+          .catch(err => {
+            return reject({
+              status: 400,
+              message: 'Error in joining',
+              error: err
+            })
+          })
       })
     } else {
       console.log('no id found---------------------')
@@ -779,5 +936,8 @@ module.exports = {
   createGroup,
   getForum,
   createTopic,
-  replyTopic
+  replyTopic,
+  createCategory_check,
+  createGroupDefault,
+  addUserIntoGroup_new
 }

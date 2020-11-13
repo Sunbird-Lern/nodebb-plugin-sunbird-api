@@ -26,9 +26,12 @@ const purgePostURL = '/api/post/v1/purge/:pid'
 const purgeTopicURL = '/api/topic/v1/purge/:tid'
 const banUserURL = '/api/user/v1/ban'
 const unbanUserURL = '/api/user/v1/unban'
+const createCatwithSubcatURL = '/api/create'
 
 const {
   createCategory,
+  createCategory_check,
+  createGroupDefault,
   addPrivileges,
   addSection,
   createForum,
@@ -42,8 +45,9 @@ const { default: Axios } = require('axios')
 
 async function createTopicAPI (req, res) {
   var payload = { ...req.body.request }
+  console.log('-----------payload ---------------', payload)
   payload.tags = payload.tags || []
-  payload.uid = req.user.uid
+  payload.uid = payload._uid ? payload._uid : req.user.uid
 
   return createTopic(payload)
     .then(topicObj => {
@@ -57,6 +61,7 @@ async function createTopicAPI (req, res) {
       return res.json(responseMessage.successResponse(resObj))
     })
     .catch(error => {
+      console.log('--------------error 00000000', error)
       let resObj = {
         id: 'api.discussions.topic.create',
         msgId: req.body.params.msgid,
@@ -75,7 +80,6 @@ async function allTopicsByCategory (req, res) {
   axios
     .get(`http://localhost:4567/api/category/${payload.cid}`)
     .then(topicObj => {
-
       let resObj = {
         id: 'api.discussions.topic.all',
         msgId: req.body.params.msgid,
@@ -101,7 +105,7 @@ async function allTopicsByCategory (req, res) {
 
 async function allPostsByTopic (req, res) {
   var payload = { ...req.body.request }
-console.log('--------------------',payload)
+  console.log('--------------------', payload)
   axios
     .get(`http://localhost:4567/api/topic/${payload.tid}`)
     .then(postObj => {
@@ -640,6 +644,63 @@ async function getForumAPI (req, res) {
     })
 }
 
+async function createCatwithSubcat (req, res) {
+  let { body } = req
+  return createCategory_check(body.request)
+    .then(catResponse => {
+      if (catResponse) {
+        let allCatIds = []
+        catResponse.sectionObj.map(section => {
+          allCatIds.push(section.cid)
+        })
+        allCatIds.push(catResponse.categoryObj.cid)
+
+        return createGroupDefault(body.request, req.user.uid, allCatIds)
+          .then(groupObj => {
+            let resObj = {
+              id: 'api.discussions.forum.create',
+              msgId: req.body.params.msgid,
+              status: 'successful',
+              resCode: 'OK',
+              data: catResponse
+            }
+            return res.json(responseMessage.successResponse(resObj))
+          })
+          .catch(error => {
+            let resObj = {
+              id: 'api.discussions.forum.create',
+              msgId: req.body.params.msgid,
+              status: 'failed',
+              resCode: 'SERVER_ERROR',
+              err: error.status,
+              errmsg: error.message
+            }
+            return res.json(responseMessage.errorResponse(resObj))
+          })
+
+        // let resObj = {
+        //   id: 'api.discussions.org.setup',
+        //   msgId: req.body.params.msgid,
+        //   status: 'successful',
+        //   resCode: 'OK',
+        //   data: catResponse
+        // }
+        // return res.json(responseMessage.successResponse(resObj))
+      }
+    })
+    .catch(error => {
+      let resObj = {
+        id: 'api.discussions.org.setup',
+        msgId: req.body.params.msgid,
+        status: 'failed',
+        resCode: 'SERVER_ERROR',
+        err: error.status,
+        errmsg: error.message
+      }
+      return res.json(responseMessage.errorResponse(resObj))
+    })
+}
+
 function commonObject (res, id, msgId, status, resCode, err, errmsg, data) {
   let resObj = null
   if (res === 0) {
@@ -720,6 +781,7 @@ Plugin.load = function (params, callback) {
     apiMiddleware.requireAdmin,
     createTopicAPI
   )
+  router.post(createCatwithSubcatURL, createCatwithSubcat)
   router.post(
     replyTopicURL,
     apiMiddleware.requireUser,
