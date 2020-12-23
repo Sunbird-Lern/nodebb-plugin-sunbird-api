@@ -40,8 +40,8 @@ const forumSchema = new Schema({
 const url =  `mongodb://${configData.mongo.host}:${configData.mongo.port}/${configData.mongo.database}`;
 mongoose.connect(url);
 const model = mongoose.model('sbcategory', forumSchema);
-const createSBForum= '/forum';
-const getSBForum= '/forumId/:id';
+const createSBForum= '/api/forum';
+const getSBForum= '/api/forumId';
 
 const {
   createCategory,
@@ -766,7 +766,8 @@ function CreateSBForumFunc (req, res) {
 }
 
 function getSBForumFunc (req, res) {
-  const id = req.params.id;
+  const id = req.body.id;
+  const type = req.body.type;
   let resObj = {
     id: 'api.discussions.category.forum',
     status: 'successful',
@@ -774,9 +775,9 @@ function getSBForumFunc (req, res) {
     data: null
   } 
   
-  if( id ) {
+  if( id && type ) {
     console.log('Get forumId');
-    model.find({sbIdentifier: id}).then(data => {
+    model.find({sbIdentifier: id, sbType: type}).then(data => {
     resObj.data = data;
     res.send(responseMessage.successResponse(resObj))
   }).catch(error => {
@@ -798,7 +799,7 @@ Plugin.load = function (params, callback) {
     CreateSBForumFunc
   )
 
-  router.get(
+  router.post(
     getSBForum,
     getSBForumFunc
   )
