@@ -777,7 +777,7 @@ function getSBForumFunc (req, res) {
   
   if( id && type ) {
     console.log('Get forumId');
-    model.find({sbIdentifier: id, sbType: type}).then(data => {
+    model.find({sbIdentifier: id, sbType: type}, { cid: 1, _id: 0 }).then(data => {
     resObj.data = data;
     res.send(responseMessage.successResponse(resObj))
   }).catch(error => {
