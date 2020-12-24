@@ -27,6 +27,8 @@ const purgeTopicURL = '/api/topic/v1/purge/:tid'
 const banUserURL = '/api/user/v1/ban'
 const unbanUserURL = '/api/user/v1/unban'
 const createCatwithSubcatURL = '/api/create'
+const createSBForum= '/api/forum';
+const getSBForum= '/api/forumId';
 
 const configData = require.main.require('./config.json')
 const mongoose = require('mongoose');
@@ -40,8 +42,6 @@ const forumSchema = new Schema({
 const url =  `mongodb://${configData.mongo.host}:${configData.mongo.port}/${configData.mongo.database}`;
 mongoose.connect(url);
 const model = mongoose.model('sbcategory', forumSchema);
-const createSBForum= '/api/forum';
-const getSBForum= '/api/forumId';
 
 const {
   createCategory,
