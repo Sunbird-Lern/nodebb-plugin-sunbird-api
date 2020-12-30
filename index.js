@@ -27,6 +27,21 @@ const purgeTopicURL = '/api/topic/v1/purge/:tid'
 const banUserURL = '/api/user/v1/ban'
 const unbanUserURL = '/api/user/v1/unban'
 const createCatwithSubcatURL = '/api/create'
+const createSBForum= '/api/forum';
+const getSBForum= '/api/forumId';
+
+const configData = require.main.require('./config.json')
+const mongoose = require('mongoose');
+const { Schema } = mongoose;
+const forumSchema = new Schema({ 
+    sbType: String,
+    cid: Number,
+    sbIdentifier: String 
+  });
+  
+const url =  `mongodb://${configData.mongo.host}:${configData.mongo.port}/${configData.mongo.database}`;
+mongoose.connect(url);
+const model = mongoose.model('sbcategory', forumSchema);
 
 const {
   createCategory,
@@ -724,8 +739,70 @@ function commonObject (res, id, msgId, status, resCode, err, errmsg, data) {
   return resObj
 }
 
+function CreateSBForumFunc (req, res) {
+  const payload = req.body;
+  let resObj = {
+    id: 'api.discussions.category.forum',
+    status: 'successful',
+    resCode: 'OK',
+    data: null
+  } 
+  const SbObj = new model(payload);
+  if( payload ) {
+  console.log("Creating the forum");
+  SbObj.save().then(data => {
+    console.log("forum created");
+    resObj.data = data;
+    res.send(responseMessage.successResponse(resObj))
+  }).catch(error => {
+    console.log("Error while Creating the forum");
+    resObj.status = 'failed';
+    resObj.resCode = 'SERVER_ERROR';
+    resObj.err = error.status;
+    resObj.errmsg = error.message;
+    res.send(responseMessage.errorResponse(resObj));
+  });
+  }
+}
+
+function getSBForumFunc (req, res) {
+  const id = req.body.id;
+  const type = req.body.type;
+  let resObj = {
+    id: 'api.discussions.category.forum',
+    status: 'successful',
+    resCode: 'OK',
+    data: null
+  } 
+  
+  if( id && type ) {
+    console.log('Get forumId');
+    model.find({sbIdentifier: id, sbType: type}, { cid: 1, _id: 0 }).then(data => {
+    resObj.data = data;
+    res.send(responseMessage.successResponse(resObj))
+  }).catch(error => {
+    console.log('Error while getting the forumId');
+    resObj.status = 'failed';
+    resObj.resCode = 'SERVER_ERROR';
+    resObj.err = error.status;
+    resObj.errmsg = error.message;
+    res.send(responseMessage.errorResponse(resObj));
+  });
+  }
+}
+
 Plugin.load = function (params, callback) {
   var router = params.router
+
+  router.post(
+    createSBForum,
+    CreateSBForumFunc
+  )
+
+  router.post(
+    getSBForum,
+    getSBForumFunc
+  )
 
   router.post(
     createForumURL,
