@@ -27,8 +27,8 @@ const purgeTopicURL = '/api/topic/v1/purge/:tid'
 const banUserURL = '/api/user/v1/ban'
 const unbanUserURL = '/api/user/v1/unban'
 const createCatwithSubcatURL = '/api/create'
-const createSBForum= '/api/forum';
-const getSBForum= '/api/forumId';
+const createSBForum= '/api/forum/v2/create';
+const getSBForum= '/api/forum/v2/read';
 
 const configData = require.main.require('./config.json')
 const mongoose = require('mongoose');
@@ -745,7 +745,7 @@ function commonObject (res, id, msgId, status, resCode, err, errmsg, data) {
  * the request object having sbType, sbIdentifier, cid in the body.
  * @param {*} res 
  */
-function CreateSBForumFunc (req, res) {
+function createSBForumFunc (req, res) {
   console.log("SB Forum Create Log: request payload=", req.body);
   const payload = { ...req.body.request };
   let resObj = {
@@ -808,15 +808,9 @@ function getSBForumFunc (req, res) {
 Plugin.load = function (params, callback) {
   var router = params.router
 
-  router.post(
-    createSBForum,
-    CreateSBForumFunc
-  )
+  router.post(getSBForum, getSBForumFunc)
 
-  router.post(
-    getSBForum,
-    getSBForumFunc
-  )
+  router.post(createSBForum, createSBForumFunc)
 
   router.post(
     createForumURL,
