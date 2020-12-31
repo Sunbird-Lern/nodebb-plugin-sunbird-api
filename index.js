@@ -746,7 +746,8 @@ function commonObject (res, id, msgId, status, resCode, err, errmsg, data) {
  * @param {*} res 
  */
 function CreateSBForumFunc (req, res) {
-  const payload = req.body;
+  console.log("SB Forum Create Log: request payload=", req.body);
+  const payload = { ...req.body.request };
   let resObj = {
     id: 'api.discussions.category.forum',
     status: 'successful',
@@ -777,8 +778,10 @@ function CreateSBForumFunc (req, res) {
  * @param {*} res 
  */
 function getSBForumFunc (req, res) {
-  const id = req.body.id;
-  const type = req.body.type;
+  console.log("SB Forum Get Log: request payload=", req.body);
+  const payload =  { ...req.body.request };
+  const id = payload.id;
+  const type = payload.type;
   let resObj = {
     id: 'api.discussions.category.forum',
     status: 'successful',
