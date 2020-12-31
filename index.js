@@ -780,7 +780,7 @@ function CreateSBForumFunc (req, res) {
 function getSBForumFunc (req, res) {
   console.log("SB Forum Get Log: request payload=", req.body);
   const payload =  { ...req.body.request };
-  const id = payload.id;
+  const id = payload.identifier;
   const type = payload.type;
   let resObj = {
     id: 'api.discussions.category.forum',
