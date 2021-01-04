@@ -778,7 +778,7 @@ function createSBForumFunc (req, res) {
  * @param {*} res 
  */
 function getSBForumFunc (req, res) {
-  console.log("SB Forum Get Log: request payload=", req.body);
+  console.log("SB Forum Get Log: request payload", req.body);
   const payload =  { ...req.body.request };
   const id = payload.identifier;
   const type = payload.type;
@@ -792,6 +792,7 @@ function getSBForumFunc (req, res) {
   if( id && type ) {
     console.log('Get forumId');
     sbCategoryModel.find({sbIdentifier: id, sbType: type}).then(data => {
+    console.log('SB Forum Get Log: db operation success=>', resObj.data);
     resObj.data = data;
     res.send(responseMessage.successResponse(resObj))
   }).catch(error => {
@@ -808,9 +809,8 @@ function getSBForumFunc (req, res) {
 Plugin.load = function (params, callback) {
   var router = params.router
 
-  router.post(getSBForum, getSBForumFunc)
-
   router.post(createSBForum, createSBForumFunc)
+  router.post(getSBForum, getSBForumFunc)
 
   router.post(
     createForumURL,
