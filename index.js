@@ -42,7 +42,8 @@ const forumSchema = new Schema({
 const mongodbConnectionUrl =  `mongodb://${configData.mongo.host}:${configData.mongo.port}/${configData.mongo.database}`;
 mongoose.connect(mongodbConnectionUrl);
 const sbCategoryModel = mongoose.model('sbcategory', forumSchema);
-
+console.log('SB config Json: ', configData);
+console.log('SB Mongo URL: ', mongodbConnectionUrl)
 const {
   createCategory,
   createCategory_check,
@@ -792,7 +793,7 @@ function getSBForumFunc (req, res) {
   if( id && type ) {
     console.log('Get forumId');
     sbCategoryModel.find({sbIdentifier: id, sbType: type}).then(data => {
-    console.log('SB Forum Get Log: db operation success=>', resObj.data);
+    console.log('SB Forum Get Log: db operation success=>', data);
     resObj.data = data;
     res.send(responseMessage.successResponse(resObj))
   }).catch(error => {
