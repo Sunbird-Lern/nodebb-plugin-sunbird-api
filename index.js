@@ -29,6 +29,7 @@ const unbanUserURL = '/api/user/v1/unban'
 const createCatwithSubcatURL = '/api/create'
 const createSBForum= '/api/forum/v2/create';
 const getSBForum= '/api/forum/v2/read';
+const removeSBForum = '/api/forum/v2/remove';
 
 const configData = require.main.require('./config.json')
 const mongoose = require('mongoose');
@@ -807,11 +808,42 @@ function getSBForumFunc (req, res) {
   }
 }
 
+/**
+ * This function will remove the  the category ids based on the sb_id and sb_type.
+ * @param {*} req 
+ * @param {*} res 
+ */
+function removeSBForumFunc (req, res) {
+  console.log(" removing category: payload: ", req.body);
+  const payload = { ...req.body.request };
+  let resObj = {
+    id: 'api.discussions.category.forum',
+    status: 'successful',
+    resCode: 'OK',
+    data: null
+  } 
+  if( payload ) {
+  console.log("Removing the category id ");
+  sbCategoryModel.deleteOne(payload).then(data => {
+    console.log("category deleted");
+    res.send(responseMessage.successResponse(resObj))
+  }).catch(error => {
+    console.log("Error while removing the category");
+    resObj.status = 'failed';
+    resObj.resCode = 'SERVER_ERROR';
+    resObj.err = error.status;
+    resObj.errmsg = error.message;
+    res.send(responseMessage.errorResponse(resObj));
+  });
+  }
+}
+
 Plugin.load = function (params, callback) {
   var router = params.router
 
   router.post(createSBForum, createSBForumFunc)
   router.post(getSBForum, getSBForumFunc)
+  router.post(removeSBForum, removeSBForumFunc)
 
   router.post(
     createForumURL,

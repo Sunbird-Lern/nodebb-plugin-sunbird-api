@@ -1,6 +1,6 @@
 {
   "name": "nodebb-plugin-create-forum",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "",
   "main": "index.js",
   "scripts": {
