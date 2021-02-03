@@ -821,12 +821,21 @@ function removeSBForumFunc (req, res) {
     status: 'successful',
     resCode: 'OK',
     data: null
-  } 
+  }
   if( payload ) {
   console.log("Removing the category id ");
   sbCategoryModel.deleteOne(payload).then(data => {
-    console.log("category deleted");
-    res.send(responseMessage.successResponse(resObj))
+    if (data.deletedCount > 0) {
+      console.log("category deleted");
+      res.send(responseMessage.successResponse(resObj))
+    } else {
+      console.log("failed to delete category");
+      resObj.status = "failed"
+      resObj.resCode = 'SERVER_ERROR';
+      resObj.errmsg = "Invalid input parameter | Data does not exist";
+      resObj.err = "404"
+      res.send(responseMessage.errorResponse(resObj));
+    }
   }).catch(error => {
     console.log("Error while removing the category");
     resObj.status = 'failed';
