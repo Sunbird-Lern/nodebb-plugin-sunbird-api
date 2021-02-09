@@ -13,7 +13,9 @@ const createTenantURL = '/api/org/v1/setup'
 const createForumURL = '/api/forum/v1/create'
 const createSectionURL = '/api/org/v1/sections/add'
 const getForumURL = '/api/forum/v1/read'
-
+const categoryList = '/api/category/list';
+const requestPromise = require('request-promise');
+const tagsList = '/api/tags/list'
 const utils = require('./utils')
 const allTopicsByCategoryURL = '/api/category/v1/topic'
 const allPostsByTopicURL = '/api/topic/v1/posts'
@@ -59,6 +61,16 @@ const {
 } = require('./library')
 
 const { default: Axios } = require('axios')
+
+var constants = {
+  'key': 'list',
+  'errorResCode': 'SERVER_ERROR',
+  'resCode': 'OK',
+  'statusFailed': 'failed',
+  'statusSuccess': 'Success',
+  '/api/category/list': 'api.discussions.category.list',
+  'api/tags/list': 'api.discussion.tags.list'
+}
 
 async function createTopicAPI (req, res) {
   var payload = { ...req.body.request }
@@ -847,12 +859,92 @@ function removeSBForumFunc (req, res) {
   }
 }
 
+async function getListOfCategories(req, res) {
+  const payload = { ...req.body.request };
+  if(payload) {
+    console.log('req url', );
+  const cids = payload.cids;
+  const path = req.originalUrl.replace(constants.key, '');
+  const url = `${req.protocol}://${req.get('host')}${path}`;
+  let allCategories = [];
+  let resObj = {
+    id: constants[categoryList],
+    status: constants.statusSuccess,
+    resCode: constants.resCode,
+    data: null
+  }
+  for(let i = 0; i < cids.length; i++) {
+    const options = {
+      uri: url+cids[i],
+      method: 'GET',
+      json: true
+    };
+    console.log(options);
+      try {
+        const data = await requestPromise(options);
+          allCategories.push(data);
+          if (i === (cids.length -1)) {
+            resObj.data = allCategories;
+            res.send(responseMessage.successResponse(resObj));
+          }
+      } catch(error) {
+        console.log({message: `Error while call the api ${options.url}`})
+        console.log({message: `Error message:  ${error.message}`})
+        res.statusCode = 404;
+        resObj.status = constants.failed;
+        resObj.resCode = constants.errorResCode;
+        resObj.err = error.status;
+        resObj.errmsg = `cid ${cids[i]} - ${error.message}`;
+        res.send(responseMessage.errorResponse(resObj));
+      }
+    }
+  }
+}
+
+async function getTagsRelatedTopics(req,res) {
+  const payload = { ...req.body.request };
+  let resObj = {
+    id: constants[tagsList],
+    status: constants.statusSuccess,
+    resCode: constants.resCode,
+    data: null
+  }
+  if (payload) {
+    const tag = payload.tag;
+    const cid = payload.cid;
+    const path = req.originalUrl.replace(constants.key, '');
+    const url = `${req.protocol}://${req.get('host')}${path}${tag}`;
+    const options = {
+      uri: url,
+      method: 'GET',
+      json: true
+    };
+    try {
+      const data = await requestPromise(options);
+      const releatedTopics = data.topics.filter(topic => topic.cid === cid);
+      resObj.data = releatedTopics;
+      res.send(responseMessage.successResponse(resObj));
+    } catch(error) {
+      console.log({message: `Error while call the api ${options.url}`})
+      console.log({message: `Error message:  ${error.message}`})
+      res.statusCode = 404;
+      resObj.status = constants.failed;
+      resObj.resCode = constants.errorResCode;
+      resObj.err = error.status;
+      resObj.errmsg = error.message;
+      res.send(responseMessage.errorResponse(resObj));
+    }
+  }
+}
+
 Plugin.load = function (params, callback) {
   var router = params.router
 
   router.post(createSBForum, createSBForumFunc)
   router.post(getSBForum, getSBForumFunc)
   router.post(removeSBForum, removeSBForumFunc)
+  router.post(categoryList, getListOfCategories);
+  router.post(tagsList, getTagsRelatedTopics);
 
   router.post(
     createForumURL,
