@@ -32,6 +32,8 @@ const createCatwithSubcatURL = '/api/create'
 const createSBForum= '/api/forum/v2/create';
 const getSBForum= '/api/forum/v2/read';
 const removeSBForum = '/api/forum/v2/remove';
+const createRelatedDiscussions = '/api/forum/v3/create';
+const waterfall = require('async-waterfall');
 
 const configData = require.main.require('./config.json')
 const mongoose = require('mongoose');
@@ -69,7 +71,12 @@ var constants = {
   'statusFailed': 'failed',
   'statusSuccess': 'Success',
   '/api/category/list': 'api.discussions.category.list',
-  'api/tags/list': 'api.discussion.tags.list'
+  'api/tags/list': 'api.discussion.tags.list',
+  'createCategory': '/v2/categories',
+  'createForum': '/forum/v2/create',
+  'defaultCategory': 'General Discussion',
+  'post': 'POST',
+  'apiPrefix': '/api'
 }
 
 async function createTopicAPI (req, res) {
@@ -937,6 +944,80 @@ async function getTagsRelatedTopics(req,res) {
   }
 }
 
+async function relatedDiscussions (req, res) {
+    const payload = { ...req.body.request };
+    if (payload) {
+      waterfall([
+        async function(callback){
+          try {
+            console.log('Creating new category')
+            const body = {
+              parentCid: payload.parentCid,
+              name: payload.categoryName || constants.defaultCategory
+            }
+            const cdata = await getResponseData(req, constants.createCategory, createRelatedDiscussions, body, constants.post);
+            console.log('Category created successfully');
+            callback(null, cdata);
+          } catch(error) {
+            console.log('Error while creating Category', error.message);
+            callback(error, null);
+          }
+        },
+        async function(category, callback){
+          try{
+            console.log('Mapping category with sourse')
+            const body = {
+              request: {
+                  sbIdentifier: payload.identifier,
+                  sbType: payload.type,
+                  cid: category.payload.cid
+              }
+            };
+            const forumData = await getResponseData(req, constants.createForum, createRelatedDiscussions, body, constants.post);
+            console.log(`Category ${category.payload.cid} mapped successfull`)
+            callback(null, forumData);
+          } catch(error) {
+            console.log('Error while mapping category with group', error.message);
+            callback(error, null);
+          }
+        }
+      ], function (err, result) {
+          if(err) {
+            res.send(error);
+            console.log('Error ', err.message);
+            return;
+          }
+          res.send(result);
+      });
+    }
+}
+
+async function getResponseData(req, url, upstremUrl, payload, method) {
+  try {
+  console.log('Preparing request options')
+  console.log('original url', req.originalUrl)
+  const apiSlug = req.originalUrl.split(upstremUrl).join('');
+  console.log('apiSlug', apiSlug)
+  const baseUrl = `${req.protocol}://${req.get('host')}${apiSlug}${constants.apiPrefix}`
+  const options = {
+          uri: baseUrl + url,
+          method: method,
+          headers: {
+            "Authorization": req.headers['authorization']
+          },
+          json: true
+        };
+      if(payload) {
+        options.body = payload;
+      }
+    console.log(options)
+    const result  = await requestPromise(options);
+    return result;
+  } catch(error) {
+    return error; 
+  }
+}
+
 Plugin.load = function (params, callback) {
   var router = params.router
 
@@ -945,6 +1026,7 @@ Plugin.load = function (params, callback) {
   router.post(removeSBForum, removeSBForumFunc)
   router.post(categoryList, getListOfCategories);
   router.post(tagsList, getTagsRelatedTopics);
+  router.post(createRelatedDiscussions, relatedDiscussions);
 
   router.post(
     createForumURL,
