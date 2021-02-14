@@ -72,6 +72,7 @@ var constants = {
   'statusSuccess': 'Success',
   '/api/category/list': 'api.discussions.category.list',
   'api/tags/list': 'api.discussion.tags.list',
+  '/api/forum/v3/create': 'api.forum.v3.create',
   'createCategory': '/v2/categories',
   'createForum': '/forum/v2/create',
   'getForum': '/forum/v2/read',
@@ -1011,18 +1012,18 @@ async function relatedDiscussions (req, res) {
         }
       ], function (err, result) {
           if(err) {
-            res.send(responseData(req,res,null, err));
+            res.send(responseData(req,res,createRelatedDiscussions,null, err));
             console.log('Error ', err.message);
             return;
           }
-          res.send(responseData(req,res,result, null));
+          res.send(responseData(req,res,createRelatedDiscussions,result, null));
       });
     }
 }
 
-function responseData(req,res,data,error) {
+function responseData(req,res, url,data,error) {
   let resObj = {
-    id: req.originalUrl,
+    id: constants[url],
     status: constants.statusSuccess,
     resCode: constants.resCode,
     data: null
