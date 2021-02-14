@@ -74,9 +74,10 @@ var constants = {
   'api/tags/list': 'api.discussion.tags.list',
   'createCategory': '/v2/categories',
   'createForum': '/forum/v2/create',
+  'getForum': '/forum/v2/read',
   'defaultCategory': 'General Discussion',
   'post': 'POST',
-  'apiPrefix': '/api'
+  'apiPrefix': '/api',
 }
 
 async function createTopicAPI (req, res) {
@@ -970,16 +971,33 @@ async function relatedDiscussions (req, res) {
             if(context && context.length > 0) {
               let forumIds = [];
               for(let i=0; i < context.length; i++) {
-                const body = {
+                // check if mapping category is already exists 
+                let forumData = {};
+                const reqObj = {
                   request: {
-                      sbIdentifier: context[i].identifier,
-                      sbType: context[i].type,
-                      cid: category.payload.cid
+                    type: context[i].type,
+                    identifier: context[i].identifier
                   }
-                };
-                const forumData = await getResponseData(req, constants.createForum, createRelatedDiscussions, body, constants.post);
-                console.log(`Category ${category.payload.cid} mapped successfull`)
-                forumIds.push(forumData.result)
+                }
+                const mappedCid = await getResponseData(req, constants.getForum, createRelatedDiscussions, reqObj, constants.post);
+                console.log('mapped cid ', mappedCid)
+                if (!(mappedCid && mappedCid.result && mappedCid.result.length > 0)) {
+                  console.log(`new category mapping to type ${context[i].type} and identifier ${context[i].identifier}`)
+                  const body = {
+                    request: {
+                        sbIdentifier: context[i].identifier,
+                        sbType: context[i].type,
+                        cid: category.payload.cid
+                    }
+                  };
+                  forumData = await getResponseData(req, constants.createForum, createRelatedDiscussions, body, constants.post);
+                  console.log(`Category ${category.payload.cid} mapped successfull`)
+                  forumIds.push(forumData.result)
+                } else {
+                  console.log(`category already mapped for type ${context[i].type} and identifier ${context[i].identifier}`)
+                  // forumIds.push(mappedCid.result)
+                  mappedCid.result.forEach(cid => forumIds.push(cid));
+                }
                 if(i === (context.length - 1)){
                   forumData.result = forumIds;
                   callback(null, forumData);
@@ -993,15 +1011,33 @@ async function relatedDiscussions (req, res) {
         }
       ], function (err, result) {
           if(err) {
-            res.send(error);
+            res.send(responseData(req,res,null, err));
             console.log('Error ', err.message);
             return;
           }
-          res.send(result);
+          res.send(responseData(req,res,result, null));
       });
     }
 }
 
+function responseData(req,res,data,error) {
+  let resObj = {
+    id: req.originalUrl,
+    status: constants.statusSuccess,
+    resCode: constants.resCode,
+    data: null
+  }
+  if(error) {
+    res.statusCode = 500;
+    resObj.status = constants.failed;
+    resObj.resCode = constants.errorResCode;
+    resObj.err = error.status || 500;
+    resObj.errmsg = error.message;
+    return responseMessage.errorResponse(resObj);
+  }
+  resObj.data = data.result;
+  return responseMessage.successResponse(resObj);
+}
 async function getResponseData(req, url, upstremUrl, payload, method) {
   try {
   console.log('Preparing request options')
