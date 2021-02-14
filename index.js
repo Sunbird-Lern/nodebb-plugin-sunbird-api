@@ -945,15 +945,15 @@ async function getTagsRelatedTopics(req,res) {
 }
 
 async function relatedDiscussions (req, res) {
-    const payload = { ...req.body.request };
+    const payload = { ...req.body.category };
     if (payload) {
       waterfall([
         async function(callback){
           try {
             console.log('Creating new category')
             const body = {
-              parentCid: payload.parentCid,
-              name: payload.categoryName || constants.defaultCategory
+              parentCid: payload.pid,
+              name: payload.name || constants.defaultCategory
             }
             const cdata = await getResponseData(req, constants.createCategory, createRelatedDiscussions, body, constants.post);
             console.log('Category created successfully');
@@ -966,16 +966,26 @@ async function relatedDiscussions (req, res) {
         async function(category, callback){
           try{
             console.log('Mapping category with sourse')
-            const body = {
-              request: {
-                  sbIdentifier: payload.identifier,
-                  sbType: payload.type,
-                  cid: category.payload.cid
+            const context = payload.context;
+            if(context && context.length > 0) {
+              let forumIds = [];
+              for(let i=0; i < context.length; i++) {
+                const body = {
+                  request: {
+                      sbIdentifier: context[i].identifier,
+                      sbType: context[i].type,
+                      cid: category.payload.cid
+                  }
+                };
+                const forumData = await getResponseData(req, constants.createForum, createRelatedDiscussions, body, constants.post);
+                console.log(`Category ${category.payload.cid} mapped successfull`)
+                forumIds.push(forumData.result)
+                if(i === (context.length - 1)){
+                  forumData.result = forumIds;
+                  callback(null, forumData);
+                }
               }
-            };
-            const forumData = await getResponseData(req, constants.createForum, createRelatedDiscussions, body, constants.post);
-            console.log(`Category ${category.payload.cid} mapped successfull`)
-            callback(null, forumData);
+            }
           } catch(error) {
             console.log('Error while mapping category with group', error.message);
             callback(error, null);
