@@ -998,8 +998,7 @@ async function relatedDiscussions (req, res) {
         console.log('category creation failed')
         console.log('Error is', cdata.message)
         res.send(responseData(req,res,createRelatedDiscussions,null, cdata));
-      }
-      
+      } 
     }
 }
 
