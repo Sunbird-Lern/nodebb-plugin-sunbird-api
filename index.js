@@ -957,7 +957,8 @@ async function relatedDiscussions (req, res) {
               parentCid: payload.pid,
               name: payload.name || constants.defaultCategory
             }
-            const cdata = await getResponseData(req, constants.createCategory, createRelatedDiscussions, body, constants.post);
+            const categoryUrl = `${constants.createCategory}?_uid=${payload.uid}`
+            const cdata = await getResponseData(req, categoryUrl, createRelatedDiscussions, body, constants.post);
             console.log('Category created successfully');
             callback(null, cdata);
           } catch(error) {
@@ -967,7 +968,7 @@ async function relatedDiscussions (req, res) {
         },
         async function(category, callback){
           try{
-            console.log('Mapping category with sourse')
+            console.log('Mapping category with sourse', category)
             const context = payload.context;
             if(context && context.length > 0) {
               let forumIds = [];
