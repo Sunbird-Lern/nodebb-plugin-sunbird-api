@@ -69,6 +69,7 @@ var constants = {
   'errorResCode': 'SERVER_ERROR',
   'resCode': 'OK',
   'statusFailed': 'failed',
+  'protocal': 'http',
   'statusSuccess': 'Success',
   '/api/category/list': 'api.discussions.category.list',
   'api/tags/list': 'api.discussion.tags.list',
@@ -1026,7 +1027,7 @@ async function getResponseData(req, url, upstremUrl, payload, method) {
   console.log('original url', req.originalUrl)
   const apiSlug = req.originalUrl.split(upstremUrl).join('');
   console.log('apiSlug', apiSlug)
-  const baseUrl = `${req.protocol}://${req.get('host')}${apiSlug}${constants.apiPrefix}`
+  const baseUrl = `${constants.protocal}://${req.get('host')}${apiSlug}${constants.apiPrefix}`
   const options = {
           uri: baseUrl + url,
           method: method,
