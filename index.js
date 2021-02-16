@@ -949,76 +949,56 @@ async function getTagsRelatedTopics(req,res) {
 async function relatedDiscussions (req, res) {
     const payload = { ...req.body.category };
     if (payload) {
-      waterfall([
-        async function(callback){
-          try {
-            console.log('Creating new category')
-            const body = {
-              parentCid: payload.pid,
-              name: payload.name || constants.defaultCategory
-            }
-            const categoryUrl = `${constants.createCategory}?_uid=${payload.uid}`
-            const cdata = await getResponseData(req, categoryUrl, createRelatedDiscussions, body, constants.post);
-            console.log('Category created successfully');
-            callback(null, cdata);
-          } catch(error) {
-            console.log('Error while creating Category', error.message);
-            callback(error, null);
-          }
-        },
-        async function(category, callback){
-          try{
-            console.log('Mapping category with sourse', category)
-            const context = payload.context;
-            if(context && context.length > 0) {
-              let forumIds = [];
-              for(let i=0; i < context.length; i++) {
-                // check if mapping category is already exists 
-                let forumData = {};
-                const reqObj = {
-                  request: {
-                    type: context[i].type,
-                    identifier: context[i].identifier
-                  }
-                }
-                const mappedCid = await getResponseData(req, constants.getForum, createRelatedDiscussions, reqObj, constants.post);
-                console.log('mapped cid ', mappedCid)
-                if (!(mappedCid && mappedCid.result && mappedCid.result.length > 0)) {
-                  console.log(`new category mapping to type ${context[i].type} and identifier ${context[i].identifier}`)
-                  const body = {
-                    request: {
-                        sbIdentifier: context[i].identifier,
-                        sbType: context[i].type,
-                        cid: category.payload.cid
-                    }
-                  };
-                  forumData = await getResponseData(req, constants.createForum, createRelatedDiscussions, body, constants.post);
-                  console.log(`Category ${category.payload.cid} mapped successfull`)
-                  forumIds.push(forumData.result)
-                } else {
-                  console.log(`category already mapped for type ${context[i].type} and identifier ${context[i].identifier}`)
-                  // forumIds.push(mappedCid.result)
-                  mappedCid.result.forEach(cid => forumIds.push(cid));
-                }
-                if(i === (context.length - 1)){
-                  forumData.result = forumIds;
-                  callback(null, forumData);
-                }
+      console.log('Creating new category')
+      const body = {
+        parentCid: payload.pid,
+        name: payload.name || constants.defaultCategory
+      }
+      const categoryUrl = `${constants.createCategory}?_uid=${payload.uid}`
+      const cdata = await getResponseData(req, categoryUrl, createRelatedDiscussions, body, constants.post);
+      if(cdata && cdata.payload) {
+        console.log('category created successfully and category id is', cdata.payload.cid)
+        const context = payload.context;
+        if(context && context.length > 0) {
+          let forumIds = [];
+          for(let i=0; i < context.length; i++) {
+            // check if mapping category is already exists 
+            let forumData = {};
+            const reqObj = {
+              request: {
+                type: context[i].type,
+                identifier: context[i].identifier
               }
             }
-          } catch(error) {
-            console.log('Error while mapping category with group', error.message);
-            callback(error, null);
+            const mappedCid = await getResponseData(req, constants.getForum, createRelatedDiscussions, reqObj, constants.post);
+            console.log('mapped cid ', mappedCid)
+            if (!(mappedCid && mappedCid.result && mappedCid.result.length > 0)) {
+              console.log(`new category mapping to type ${context[i].type} and identifier ${context[i].identifier}`)
+              const body = {
+                request: {
+                    sbIdentifier: context[i].identifier,
+                    sbType: context[i].type,
+                    cid: cdata.payload.cid
+                }
+              };
+              forumData = await getResponseData(req, constants.createForum, createRelatedDiscussions, body, constants.post);
+              console.log(`Category ${cdata.payload.cid} mapped successfull`)
+              forumIds.push(forumData.result)
+            } else {
+              console.log(`category already mapped for type ${context[i].type} and identifier ${context[i].identifier}`)
+              mappedCid.result.forEach(cid => forumIds.push(cid));
+            }
+            if(i === (context.length - 1)){
+              forumData.result = forumIds;
+              res.send(responseData(req,res,createRelatedDiscussions,forumData, null)); 
+            }
           }
         }
-      ], function (err, result) {
-          if(err) {
-            res.send(responseData(req,res,createRelatedDiscussions,null, err));
-            console.log('Error ', err.message);
-            return;
-          }
-          res.send(responseData(req,res,createRelatedDiscussions,result, null));
-      });
+      } else {
+        console.log('category creation failed')
+        console.log('Error is', cdata.message)
+        res.send(responseData(req,res,createRelatedDiscussions,null, cdata));
+      } 
     }
 }
 
@@ -1030,10 +1010,10 @@ function responseData(req,res, url,data,error) {
     data: null
   }
   if(error) {
-    res.statusCode = 500;
+    res.statusCode = error.statusCode || 500;
     resObj.status = constants.failed;
     resObj.resCode = constants.errorResCode;
-    resObj.err = error.status || 500;
+    resObj.err = error.statusCode || 500;
     resObj.errmsg = error.message;
     return responseMessage.errorResponse(resObj);
   }
