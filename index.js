@@ -81,7 +81,6 @@ var constants = {
   'getForum': '/forum/v2/read',
   'createPrivileges': '/v2/categories/:cid/privileges',
   '/api/privileges/v2/copy': 'api.privileges.v2.copy',
-  'enablePrivileges': '/v2/categories/:cid/privileges',
   'defaultCategory': 'General Discussion',
   'post': 'POST',
   'get': 'GET',
