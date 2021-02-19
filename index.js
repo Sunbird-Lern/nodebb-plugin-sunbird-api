@@ -34,6 +34,8 @@ const getSBForum= '/api/forum/v2/read';
 const removeSBForum = '/api/forum/v2/remove';
 const createRelatedDiscussions = '/api/forum/v3/create';
 const waterfall = require('async-waterfall');
+const privileges = require.main.require('./src/privileges');
+const copyPrivilages = '/api/privileges/v2/copy'
 
 const configData = require.main.require('./config.json')
 const mongoose = require('mongoose');
@@ -69,7 +71,7 @@ var constants = {
   'errorResCode': 'SERVER_ERROR',
   'resCode': 'OK',
   'statusFailed': 'failed',
-  'protocal': 'http',
+  'http_protocal': 'http',
   'statusSuccess': 'Success',
   '/api/category/list': 'api.discussions.category.list',
   'api/tags/list': 'api.discussion.tags.list',
@@ -77,8 +79,13 @@ var constants = {
   'createCategory': '/v2/categories',
   'createForum': '/forum/v2/create',
   'getForum': '/forum/v2/read',
+  'createPrivileges': '/v2/categories/:cid/privileges',
+  '/api/privileges/v2/copy': 'api.privileges.v2.copy',
+  'enablePrivileges': '/v2/categories/:cid/privileges',
   'defaultCategory': 'General Discussion',
   'post': 'POST',
+  'get': 'GET',
+  'put': 'PUT',
   'apiPrefix': '/api',
 }
 
@@ -931,7 +938,7 @@ async function getTagsRelatedTopics(req,res) {
     };
     try {
       const data = await requestPromise(options);
-      const releatedTopics = data.topics.filter(topic => topic.cid === cid);
+      const releatedTopics = data.topics.filter(topic => cid.includes(topic.cid));
       resObj.data = releatedTopics;
       res.send(responseMessage.successResponse(resObj));
     } catch(error) {
@@ -1027,7 +1034,7 @@ async function getResponseData(req, url, upstremUrl, payload, method) {
   console.log('original url', req.originalUrl)
   const apiSlug = req.originalUrl.split(upstremUrl).join('');
   console.log('apiSlug', apiSlug)
-  const baseUrl = `${constants.protocal}://${req.get('host')}${apiSlug}${constants.apiPrefix}`
+  const baseUrl = `${constants.http_protocal}://${req.get('host')}${apiSlug}${constants.apiPrefix}`
   const options = {
           uri: baseUrl + url,
           method: method,
@@ -1047,6 +1054,37 @@ async function getResponseData(req, url, upstremUrl, payload, method) {
   }
 }
 
+async function copyPrivilegesFromCategory(req, res) {
+  const payload = { ...req.body.request };
+  const cid = payload.cid;
+  const pid = payload.pid;
+  const uid = payload.uid;
+  const categoryPrivilages = await privileges.categories.list(pid);
+  categoryPrivilages.groups.forEach(async (group, index) => {
+    const groupPrivileges = group.privileges;
+    const data = Object.keys(groupPrivileges).filter(x => groupPrivileges[x] === true);
+    const reqObj = {
+      privileges: data,
+      groups: [group.name]
+    }
+    try {
+    const result = await getResponseData(req, `${constants.createPrivileges}?_uid=${uid}`.replace(':cid', cid), copyPrivilages, reqObj , constants.put);
+    console.log('Privilege result: ',result)
+      if(result && (result['statusCode'] === 401 || result['statusCode'] === 403) ) {
+        const error = new Error(result);
+        error['statusCode'] = result['statusCode'];
+        throw error;
+      }
+      if(index === (categoryPrivilages.groups.length- 1)){
+        res.send(responseData(req,res,copyPrivilages,result, null));
+      }
+    } catch(error) {
+        res.send(responseData(req,res,copyPrivilages,null, error));
+        return;
+  }
+  });
+}
+
 Plugin.load = function (params, callback) {
   var router = params.router
 
@@ -1056,6 +1094,7 @@ Plugin.load = function (params, callback) {
   router.post(categoryList, getListOfCategories);
   router.post(tagsList, getTagsRelatedTopics);
   router.post(createRelatedDiscussions, relatedDiscussions);
+  router.post(copyPrivilages, copyPrivilegesFromCategory);
 
   router.post(
     createForumURL,
