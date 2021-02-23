@@ -33,10 +33,9 @@ const createSBForum= '/api/forum/v2/create';
 const getSBForum= '/api/forum/v2/read';
 const removeSBForum = '/api/forum/v2/remove';
 const createRelatedDiscussions = '/api/forum/v3/create';
-const waterfall = require('async-waterfall');
 const privileges = require.main.require('./src/privileges');
 const copyPrivilages = '/api/privileges/v2/copy'
-
+const getUids = '/api/forum/v2/uids';
 const configData = require.main.require('./config.json')
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
@@ -67,6 +66,7 @@ const {
 const { default: Axios } = require('axios')
 
 var constants = {
+  'name': 'sunbird-oidc',
   'key': 'list',
   'errorResCode': 'SERVER_ERROR',
   'resCode': 'OK',
@@ -79,6 +79,7 @@ var constants = {
   'createCategory': '/v2/categories',
   'createForum': '/forum/v2/create',
   'getForum': '/forum/v2/read',
+  'addUserIntoGroup': '/v2/groups/:slug/membership/:uid',
   'createPrivileges': '/v2/categories/:cid/privileges',
   '/api/privileges/v2/copy': 'api.privileges.v2.copy',
   'defaultCategory': 'General Discussion',
@@ -953,60 +954,162 @@ async function getTagsRelatedTopics(req,res) {
   }
 }
 
+async function getUserIds(req,res) {
+  const oAuthids = req.body.request.sbIdentifiers;
+  const groupData = await privileges.categories.groupPrivileges(5, 'testg')
+  try {
+    const userIds = await userDetails(oAuthids);
+    const data = {groupData: groupData, userIds:userIds}
+    res.send(responseData(req,res, getUids ,data, null))
+  } catch(error) {
+    console.log(error)
+    res.send(responseData(req,res, getUids ,null, error))
+  }
+}
+
+async function userDetails(sbIds) {
+  return new Promise((resolve, reject) => {
+    let userIds= [];
+    try {
+      sbIds.forEach(async (sbId, index) => {
+        const userId = await db.getObjectField(constants.name + 'Id:uid', sbId);
+        if (userId == null) {
+          const error = new Error("uid not found");
+          error.statusCode = 400;
+          reject(error);
+        }
+        userIds.push({nodebbUid: userId, sbUid: sbId})
+        if(index === (sbIds.length -1)) {
+          resolve(userIds)
+        }
+      })
+    } catch(error) {
+      error.statusCode = 500;
+      reject(error);
+    }
+  })
+}
+
 async function relatedDiscussions (req, res) {
     const payload = { ...req.body.category };
     if (payload) {
       console.log('Creating new category')
-      const body = {
-        parentCid: payload.pid,
-        name: payload.name || constants.defaultCategory
-      }
-      const categoryUrl = `${constants.createCategory}?_uid=${payload.uid}`
-      const cdata = await getResponseData(req, categoryUrl, createRelatedDiscussions, body, constants.post);
-      if(cdata && cdata.payload) {
-        console.log('category created successfully and category id is', cdata.payload.cid)
-        const context = payload.context;
-        if(context && context.length > 0) {
-          let forumIds = [];
-          for(let i=0; i < context.length; i++) {
-            // check if mapping category is already exists 
-            let forumData = {};
-            const reqObj = {
-              request: {
-                type: context[i].type,
-                identifier: context[i].identifier
-              }
+        const body = {
+          parentCid: payload.pid,
+          name: payload.name || constants.defaultCategory
+        };
+        const categoryUrl = `${constants.createCategory}?_uid=${payload.uid}`
+        const cdata = await getResponseData(req, categoryUrl, createRelatedDiscussions, body, constants.post);
+        if(cdata && cdata.payload) {
+          console.log('category created successfully and category id is', cdata.payload.cid)
+          if(payload.enbaleGroups === "true") {
+            const groupDetails = {
+              "cid": cdata.payload.cid,
+              "uid": payload.uid,
+              "groups": payload.groups
             }
-            const mappedCid = await getResponseData(req, constants.getForum, createRelatedDiscussions, reqObj, constants.post);
-            console.log('mapped cid ', mappedCid)
-            if (!(mappedCid && mappedCid.result && mappedCid.result.length > 0)) {
-              console.log(`new category mapping to type ${context[i].type} and identifier ${context[i].identifier}`)
-              const body = {
-                request: {
+            const addPrivileges = await groupsAndPrivileges(req, groupDetails);
+          }
+          if(addPrivileges.code === 'ok') {
+            console.log("Privileges added successfully")
+          } else{
+            console.log("failed to add privileges")
+          }
+          const context = payload.context;
+          if(context && context.length > 0) {
+            let forumIds = [];
+            for(let i=0; i < context.length; i++) {
+              const isCidMapped = await sbCategoryModel.find({sbIdentifier: context[i].identifier, sbType: context[i].type})
+              if(payload.createNew || isCidMapped.length === 0 ){
+              let mapObj = {
                     sbIdentifier: context[i].identifier,
                     sbType: context[i].type,
                     cid: cdata.payload.cid
                 }
-              };
-              forumData = await getResponseData(req, constants.createForum, createRelatedDiscussions, body, constants.post);
-              console.log(`Category ${cdata.payload.cid} mapped successfull`)
-              forumIds.push(forumData.result)
+              const SbObj = new sbCategoryModel(mapObj);
+              const mapResponse = await SbObj.save();
+              const mappedCids = await sbCategoryModel.find({sbIdentifier: context[i].identifier, sbType: context[i].type})
+              const listOfCids = mappedCids.map(forum => forum.cid);
+              const mapResObj = {
+                "sbType": context[i].identifier,
+                "sbIdentifier": context[i].identifier,
+                "newCid": cdata.payload.cid,
+                "cids": listOfCids
+              }
+              forumIds.push(mapResObj)
             } else {
-              console.log(`category already mapped for type ${context[i].type} and identifier ${context[i].identifier}`)
-              mappedCid.result.forEach(cid => forumIds.push(cid));
+              console.log("cid already mapped and create new fieldis false")
+              const mappedCids = await sbCategoryModel.find({sbIdentifier: context[i].identifier, sbType: context[i].type})
+              const listOfCids = mappedCids.map(forum => forum.cid);
+              const mapResObj = {
+                "sbType": context[i].identifier,
+                "sbIdentifier": context[i].identifier,
+                "cids": listOfCids
+              }
+              forumIds.push(mapResObj)
             }
             if(i === (context.length - 1)){
-              forumData.result = forumIds;
-              res.send(responseData(req,res,createRelatedDiscussions,forumData, null)); 
+              const result = {forums: forumIds, groups: payload.groups};
+              console.log(result)
+              res.send(responseData(req,res,createRelatedDiscussions,result, null)); 
             }
+            }
+            if(payload.privileges.copyFromCategory){
+              const body = {
+                request : {cid : cdata.payload.cid,
+                pid : payload.privileges.copyFromCategory,
+                uid : payload.uid}
+              }
+              copyPrivilegesFromCategory(req, body, createRelatedDiscussions);
+            }
+          } else {
+            const contextError = new Error("Bad context data");
+            contextError,statusCode = 400;
+            res.send(responseData(req,res,createRelatedDiscussions,null, contextError));
           }
-        }
-      } else {
-        console.log('category creation failed')
-        console.log('Error is', cdata.message)
-        res.send(responseData(req,res,createRelatedDiscussions,null, cdata));
-      } 
+        } else {
+          console.log('category creation failed')
+          console.log('Error is', cdata.message)
+          res.send(responseData(req,res,createRelatedDiscussions,null, cdata));
+        } 
     }
+}
+
+async function groupsAndPrivileges(req, groupData){
+  return new Promise(async (resolve, reject) => {
+    const payload = groupData;
+    const groups = payload.groups;
+    const uid = payload.uid;
+    const cid = payload.cid;
+    for (let i=0; i < groups.length; i++){
+      const groupData = groups[i];
+      const isGroupExists = await Groups.exists(groupData.name);
+      if(!isGroupExists) {
+        Groups.create({
+          name: groupData.name
+        });
+      }
+        const reqBody = {
+          "privileges": groupData.privileges,
+          "groups": [ groupData.name ]
+        }
+        const addGroupAndPrivileges = await getResponseData(req, `${constants.createPrivileges}?_uid=${uid}`.replace(':cid', cid), createRelatedDiscussions, reqBody , constants.put);
+        try {
+        const nodebbUids = await userDetails(groupData.sbUids);
+        for(let j=0; j < nodebbUids.length; j++){
+          const groupSlug = await Groups.getGroupField(groupData.name, 'slug');
+          const membershipUrl = `${constants.addUserIntoGroup}?_uid=${uid}`.replace(':slug', groupSlug);
+          getResponseData(req, membershipUrl.replace(":uid", nodebbUids[j]['nodebbUid']), createRelatedDiscussions, null , constants.put)
+        }
+      } catch(error) {
+        console.log(error)
+        return;
+      }
+      if(i === (groups.length -1)) {
+        resolve({code: 'ok', result: groupDetails})
+      }
+    }
+  })
 }
 
 function responseData(req,res, url,data,error) {
@@ -1024,9 +1127,10 @@ function responseData(req,res, url,data,error) {
     resObj.errmsg = error.message;
     return responseMessage.errorResponse(resObj);
   }
-  resObj.data = data.result;
+  resObj.data = data.result || data;
   return responseMessage.successResponse(resObj);
 }
+
 async function getResponseData(req, url, upstremUrl, payload, method) {
   try {
   console.log('Preparing request options')
@@ -1053,8 +1157,19 @@ async function getResponseData(req, url, upstremUrl, payload, method) {
   }
 }
 
-async function copyPrivilegesFromCategory(req, res) {
-  const payload = { ...req.body.request };
+async function copyPrivilegeData(req, res) {
+  const payload = { ...req.body };
+  const privilegesCopied = await copyPrivilegesFromCategory(req, payload, copyPrivilages);
+  if (privilegesCopied && (privilegesCopied.statusCode)) {
+    res.send(responseData(req,res,copyPrivilages,null, privilegesCopied));
+    return;
+  }
+  res.send(responseData(req,res,copyPrivilages,privilegesCopied, null));
+}
+
+async function copyPrivilegesFromCategory(req, body, upstremUrl) {
+ return new Promise(async (resolve, reject) =>{
+  const payload = { ...body.request };
   const cid = payload.cid;
   const pid = payload.pid;
   const uid = payload.uid;
@@ -1067,7 +1182,7 @@ async function copyPrivilegesFromCategory(req, res) {
       groups: [group.name]
     }
     try {
-    const result = await getResponseData(req, `${constants.createPrivileges}?_uid=${uid}`.replace(':cid', cid), copyPrivilages, reqObj , constants.put);
+    const result = await getResponseData(req, `${constants.createPrivileges}?_uid=${uid}`.replace(':cid', cid), upstremUrl, reqObj , constants.put);
     console.log('Privilege result: ',result)
       if(result && (result['statusCode'] === 401 || result['statusCode'] === 403) ) {
         const error = new Error(result);
@@ -1075,13 +1190,13 @@ async function copyPrivilegesFromCategory(req, res) {
         throw error;
       }
       if(index === (categoryPrivilages.groups.length- 1)){
-        res.send(responseData(req,res,copyPrivilages,result, null));
+        resolve(result);
       }
     } catch(error) {
-        res.send(responseData(req,res,copyPrivilages,null, error));
-        return;
+        reject(error);
   }
   });
+ })
 }
 
 Plugin.load = function (params, callback) {
@@ -1093,7 +1208,8 @@ Plugin.load = function (params, callback) {
   router.post(categoryList, getListOfCategories);
   router.post(tagsList, getTagsRelatedTopics);
   router.post(createRelatedDiscussions, relatedDiscussions);
-  router.post(copyPrivilages, copyPrivilegesFromCategory);
+  router.post(copyPrivilages, copyPrivilegeData);
+  router.post(getUids, getUserIds);
 
   router.post(
     createForumURL,
