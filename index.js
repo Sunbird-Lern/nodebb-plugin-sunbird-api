@@ -1106,7 +1106,7 @@ async function groupsAndPrivileges(req, groupData){
         return;
       }
       if(i === (groups.length -1)) {
-        resolve({code: 'ok', result: groupDetails})
+        resolve({code: 'ok'})
       }
     }
   })
