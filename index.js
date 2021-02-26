@@ -994,33 +994,25 @@ async function relatedDiscussions (req, res) {
     const payload = { ...req.body.category };
     if (payload) {
       console.log('Creating new category')
+
+        // creating payload for category 
         const body = {
           parentCid: payload.pid,
           name: payload.name || constants.defaultCategory
         };
+        // category request url
         const categoryUrl = `${constants.createCategory}?_uid=${payload.uid}`
+        // making api call to create category
         const cdata = await getResponseData(req, categoryUrl, createRelatedDiscussions, body, constants.post);
+        
         if(cdata && cdata.payload) {
           console.log('category created successfully and category id is', cdata.payload.cid)
-          if(payload.enbaleGroups === "true") {
-            const groupDetails = {
-              "cid": cdata.payload.cid,
-              "uid": payload.uid,
-              "groups": payload.groups
-            }
-            const addPrivileges = await groupsAndPrivileges(req, groupDetails);
-          }
-          if(addPrivileges.code === 'ok') {
-            console.log("Privileges added successfully")
-          } else{
-            console.log("failed to add privileges")
-          }
           const context = payload.context;
           if(context && context.length > 0) {
             let forumIds = [];
             for(let i=0; i < context.length; i++) {
+              // mapping cid with context
               const isCidMapped = await sbCategoryModel.find({sbIdentifier: context[i].identifier, sbType: context[i].type})
-              if(payload.createNew || isCidMapped.length === 0 ){
               let mapObj = {
                     sbIdentifier: context[i].identifier,
                     sbType: context[i].type,
@@ -1028,6 +1020,7 @@ async function relatedDiscussions (req, res) {
                 }
               const SbObj = new sbCategoryModel(mapObj);
               const mapResponse = await SbObj.save();
+              // getting all mapped cids for a context
               const mappedCids = await sbCategoryModel.find({sbIdentifier: context[i].identifier, sbType: context[i].type})
               const listOfCids = mappedCids.map(forum => forum.cid);
               const mapResObj = {
@@ -1036,31 +1029,43 @@ async function relatedDiscussions (req, res) {
                 "newCid": cdata.payload.cid,
                 "cids": listOfCids
               }
-              forumIds.push(mapResObj)
-            } else {
-              console.log("cid already mapped and create new fieldis false")
-              const mappedCids = await sbCategoryModel.find({sbIdentifier: context[i].identifier, sbType: context[i].type})
-              const listOfCids = mappedCids.map(forum => forum.cid);
-              const mapResObj = {
-                "sbType": context[i].identifier,
-                "sbIdentifier": context[i].identifier,
-                "cids": listOfCids
+              forumIds.push(mapResObj);
+              if(i === (context.length - 1)){
+                const result = {forums: forumIds, groups: payload.groups};
+                console.log(result)
+                res.send(responseData(req,res,createRelatedDiscussions,result, null)); 
               }
-              forumIds.push(mapResObj)
             }
-            if(i === (context.length - 1)){
-              const result = {forums: forumIds, groups: payload.groups};
-              console.log(result)
-              res.send(responseData(req,res,createRelatedDiscussions,result, null)); 
-            }
-            }
-            if(payload.privileges.copyFromCategory){
+            // checking for groups 
+            if(payload.enbaleGroups === "true") {
+              const groupDetails = {
+                "cid": cdata.payload.cid,
+                "uid": payload.uid,
+                "groups": payload.groups
+              }
+              // create group, enable privilages and add users into groups
+              const addPrivileges = await groupsAndPrivileges(req, groupDetails);
+            } else if(payload.privileges.copyFromCategory){
               const body = {
-                request : {cid : cdata.payload.cid,
-                pid : payload.privileges.copyFromCategory,
-                uid : payload.uid}
+                request : {
+                  cid : cdata.payload.cid,
+                  pid : payload.privileges.copyFromCategory,
+                  uid : payload.uid
+                }
               }
+              // coping privileges from selected category
               copyPrivilegesFromCategory(req, body, createRelatedDiscussions);
+            } else if(payload.privileges.copytoChildren && payload.privileges.copytoChildren === "true" ) {
+              const parentCid = await Categories.getCategoryField(cdata.payload.cid, 'parentCid');
+              const reqBody = {
+                request : {
+                  cid : cdata.payload.cid,
+                  pid : parentCid,
+                  uid : payload.uid
+                }
+              }
+              // coping privileges from parent category
+              copyPrivilegesFromCategory(req, reqBody, createRelatedDiscussions);
             }
           } else {
             const contextError = new Error("Bad context data");
