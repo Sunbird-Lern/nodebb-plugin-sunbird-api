@@ -1037,7 +1037,7 @@ async function relatedDiscussions (req, res) {
               }
             }
             // checking for groups 
-            if(payload.enbaleGroups === "true") {
+            if(payload.enableGroups === "true") {
               const groupDetails = {
                 "cid": cdata.payload.cid,
                 "uid": payload.uid,
