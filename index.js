@@ -36,10 +36,10 @@ const createRelatedDiscussions = '/api/forum/v3/create';
 const privileges = require.main.require('./src/privileges');
 const copyPrivilages = '/api/privileges/v2/copy'
 const getUids = '/api/forum/v2/uids';
-const addUserIntoGroup = '/api/forum/add/user';
+const addUserIntoGroup = '/api/forum/v3/group/membership';
 const oidcPlugin = require.main.require('./node_modules/nodebb-plugin-sunbird-oidc/library.js');
 const Settings = require.main.require('./src/settings');
-const listOfGroupUsers = '/api/forum/user/groups';
+const listOfGroupUsers = '/api/forum/v3/groups/users';
 const configData = require.main.require('./config.json')
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
@@ -1138,7 +1138,7 @@ async function groupsAndPrivileges(req, groupData){
 
 function responseData(req,res, url,data,error) {
   let resObj = {
-    id: constants[url],
+    id: constants[url] || req.originalUrl.split('/').join('.'),
     status: constants.statusSuccess,
     resCode: constants.resCode,
     data: null
@@ -1290,23 +1290,34 @@ function addUsersInGroup(groups, uid) {
 // Fetch list of users added into a group
 async function getUserGroups(req, res) {
   const payload = { ...req.body.request };
-  const groups = payload.groups;
+  const groups = payload.groups || [];
   const cid = payload.cid;
   const groupsList= await privileges.categories.list(cid);
-  const groupsData = await Groups.getMembersOfGroups(groups);
+  const cgroupd = groupsList.groups.map(group => group.name);
+  const allGroups = Array.from(new Set(cgroupd.concat(groups)));
+  console.log(allGroups)
+  const groupsData = await Groups.getMembersOfGroups(allGroups);
+  console.log(groupsData)
   let userList = [];
-  groupsData.forEach(async (groupUsers, i) => {
-    let data = {};
-    data[groups[i]] = await getUserDetails(groupUsers);
-    userList.push(data);
-    if(i === (groupsData.length -1)) {
-      const result = {
-        userLIst: userList, 
-        groupsList: groupsList.groups
+  if(groupsData && groupsData.length > 0) {
+    groupsData.forEach(async (groupUsers, i) => {
+      let data = {
+        name: allGroups[i]
       };
-      res.send(responseData(req,res,listOfGroupUsers,result,null))
-    }
-  });
+      if(groupUsers && groupUsers.length > 0){
+        data['members'] = await getUserDetails(groupUsers);
+      } else {
+        data['members'] = []
+      }
+      userList.push(data);
+      if(i === (groupsData.length -1)) {
+        const result = {
+          groups: userList
+        };
+        res.send(responseData(req,res,listOfGroupUsers,result,null))
+      }
+    });
+  }
 }
 
 async function getUserDetails(groupUsers) {
@@ -1315,9 +1326,9 @@ async function getUserDetails(groupUsers) {
     groupUsers.forEach(async (uid, i) => {
       const userDetails = await Users.getUserData(uid)
       const data = {
-        "sbUid": userDetails['sunbird-oidcId'],
-        "nodeBBUid": userDetails.uid,
-        "userName": userDetails.username
+        "uid": userDetails.uid,
+        "userName": userDetails.username,
+        "sbUid": userDetails['sunbird-oidcId']
       }
       users.push(data)
       if(i === (groupUsers.length -1)) {
