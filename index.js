@@ -36,6 +36,10 @@ const createRelatedDiscussions = '/api/forum/v3/create';
 const privileges = require.main.require('./src/privileges');
 const copyPrivilages = '/api/privileges/v2/copy'
 const getUids = '/api/forum/v2/uids';
+const addUserIntoGroup = '/api/forum/add/user';
+const oidcPlugin = require.main.require('./node_modules/nodebb-plugin-sunbird-oidc/library.js');
+const Settings = require.main.require('./src/settings');
+const listOfGroupUsers = '/api/forum/user/groups';
 const configData = require.main.require('./config.json')
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
@@ -87,6 +91,18 @@ var constants = {
   'get': 'GET',
   'put': 'PUT',
   'apiPrefix': '/api',
+  'pluginSettings': new Settings('fusionauth-oidc', '1.0.0', {
+    // Default settings
+    clientId: null,
+    clientSecret: null,
+    emailClaim: 'email',
+    discoveryBaseURL: null,
+    authorizationEndpoint: null,
+    tokenEndpoint: null,
+    ssoTokenEndpoint: null,
+    userInfoEndpoint: null,
+    emailDomain: null
+  }, false, false),
 }
 
 async function createTopicAPI (req, res) {
@@ -994,7 +1010,6 @@ async function relatedDiscussions (req, res) {
     const payload = { ...req.body.category };
     if (payload) {
       console.log('Creating new category')
-
         // creating payload for category 
         const body = {
           parentCid: payload.pid,
@@ -1031,45 +1046,49 @@ async function relatedDiscussions (req, res) {
               }
               forumIds.push(mapResObj);
               if(i === (context.length - 1)){
-                const result = {forums: forumIds, groups: payload.groups};
+                const result = {forums: forumIds};
                 console.log(result)
                 res.send(responseData(req,res,createRelatedDiscussions,result, null)); 
               }
             }
-            // checking for groups 
-            if(payload.enableGroups === "true") {
-              const groupDetails = {
-                "cid": cdata.payload.cid,
-                "uid": payload.uid,
-                "groups": payload.groups
-              }
-              // create group, enable privilages and add users into groups
-              const addPrivileges = await groupsAndPrivileges(req, groupDetails);
-            } else if(payload.privileges.copyFromCategory){
-              const body = {
-                request : {
-                  cid : cdata.payload.cid,
-                  pid : payload.privileges.copyFromCategory,
-                  uid : payload.uid
+            // copy privileges from a category 
+           if(payload.privileges.copyFromCategory){
+              const result = await Categories.copyPrivilegesFrom(payload.privileges.copyFromCategory, cdata.payload.cid);
+            }
+
+            // creating sub categories, adding groups and enable privilages
+            if(payload.subcategories && payload.subcategories.length > 0) {
+              console.log("sub categories")
+              const subcategories = payload.subcategories;
+              subcategories.forEach(async (category) => {
+                const categoryObj = {
+                  name: category.name,
+                  parentCid: cdata.payload.cid
                 }
-              }
-              // coping privileges from selected category
-              copyPrivilegesFromCategory(req, body, createRelatedDiscussions);
-            } else if(payload.privileges.copytoChildren && payload.privileges.copytoChildren === "true" ) {
-              const parentCid = await Categories.getCategoryField(cdata.payload.cid, 'parentCid');
-              const reqBody = {
-                request : {
-                  cid : cdata.payload.cid,
-                  pid : parentCid,
-                  uid : payload.uid
+               const creatSubCategory =  await Categories.create(categoryObj);
+               
+              //  mapping category id for a context
+                if(category.context && category.context.length > 0) {
+                    category.context.forEach(async (context) => {
+                      const contextObj = {
+                        "sbType": context.type,
+                        "sbIdentifier": context.identifier,
+                        "cid": creatSubCategory.cid
+                      }
+                      const SbObj = new sbCategoryModel(contextObj);
+                      const mapResponse = await SbObj.save();
+                    })
                 }
-              }
-              // coping privileges from parent category
-              copyPrivilegesFromCategory(req, reqBody, createRelatedDiscussions);
+
+                //  Adding privileges to sub-categories from a selected category id
+                  if (category.privileges && category.privileges.copyFromCategory) {
+                    const result = await Categories.copyPrivilegesFrom(category.privileges.copyFromCategory, creatSubCategory.cid);
+                  }
+              })
             }
           } else {
             const contextError = new Error("Bad context data");
-            contextError,statusCode = 400;
+            contextError.statusCode = 400;
             res.send(responseData(req,res,createRelatedDiscussions,null, contextError));
           }
         } else {
@@ -1204,6 +1223,110 @@ async function copyPrivilegesFromCategory(req, body, upstremUrl) {
  })
 }
 
+async function addUsers(req, res) {
+  const payload = { ...req.body.request };
+  const groupsList = payload.groups;
+  const sunbirdUsers = payload.sbUsers;
+  sunbirdUsers.forEach(async (user, index) => {
+    let nodebbUid = await db.getObjectField(constants.name + 'Id:uid', user.identifier);
+    if(!nodebbUid) {
+        nodebbUid = await createNewUser(user);
+    }
+    console.log("Uid : ", nodebbUid)
+    const addIntoGroups = await addUsersInGroup(groupsList, nodebbUid);
+    if(index === (sunbirdUsers.length -1)) {
+      const result = {code: "ok"}
+      res.send(responseData(req,res,addUserIntoGroup,result, null));
+    }
+  })
+}
+
+// creating new user using nodebb-plugin-sunbird-oidc plugin
+function createNewUser(user) {
+  return new Promise((resolve, reject) => {
+    const settings = constants.pluginSettings.getWrapper();
+    var email = user.username + '@' + settings.emailDomain;
+    const userPayload = {
+      username: user.username,
+      oAuthid: user.identifier,
+      email: email,
+      rolesEnabled: settings.rolesClaim && settings.rolesClaim.length !== 0,
+      isAdmin: false,
+    }
+    console.log(oidcPlugin)
+    oidcPlugin.login(userPayload, (err, user) => {
+      if(err && err === 'UserExists') {
+        resolve(user.uid);
+        return;
+      } else if(user) {
+        resolve(user.uid);
+      } else {
+        reject(err);
+      }
+    });
+  })
+}
+
+// Adding users into groups  
+function addUsersInGroup(groups, uid) {
+  console.log(groups, uid)
+  return new Promise((resolve, reject) => {
+    groups.forEach(async (group, i) => {
+      const isGroupExists = await Groups.exists(group);
+      if(!isGroupExists) {
+        Groups.create({
+          name: group
+        });
+      }
+      const isGroupMember = await Groups.isMember(uid, group)
+      const joinIntoGroup = await Groups.join([group], uid);
+      if(i === (groups.length -1)) {
+        resolve({code: "ok"})
+      }
+    })
+  })
+} 
+
+// Fetch list of users added into a group
+async function getUserGroups(req, res) {
+  const payload = { ...req.body.request };
+  const groups = payload.groups;
+  const cid = payload.cid;
+  const groupsList= await privileges.categories.list(cid);
+  const groupsData = await Groups.getMembersOfGroups(groups);
+  let userList = [];
+  groupsData.forEach(async (groupUsers, i) => {
+    let data = {};
+    data[groups[i]] = await getUserDetails(groupUsers);
+    userList.push(data);
+    if(i === (groupsData.length -1)) {
+      const result = {
+        userLIst: userList, 
+        groupsList: groupsList.groups
+      };
+      res.send(responseData(req,res,listOfGroupUsers,result,null))
+    }
+  });
+}
+
+async function getUserDetails(groupUsers) {
+  const users = [];
+  return new Promise((resolve, reject) => {
+    groupUsers.forEach(async (uid, i) => {
+      const userDetails = await Users.getUserData(uid)
+      const data = {
+        "sbUid": userDetails['sunbird-oidcId'],
+        "nodeBBUid": userDetails.uid,
+        "userName": userDetails.username
+      }
+      users.push(data)
+      if(i === (groupUsers.length -1)) {
+        resolve(users)
+      }
+    })
+  })
+}
+
 Plugin.load = function (params, callback) {
   var router = params.router
 
@@ -1215,7 +1338,8 @@ Plugin.load = function (params, callback) {
   router.post(createRelatedDiscussions, relatedDiscussions);
   router.post(copyPrivilages, copyPrivilegeData);
   router.post(getUids, getUserIds);
-
+  router.post(addUserIntoGroup, addUsers);
+  router.post(listOfGroupUsers, getUserGroups);
   router.post(
     createForumURL,
     apiMiddleware.requireUser,
