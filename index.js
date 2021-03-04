@@ -37,6 +37,7 @@ const privileges = require.main.require('./src/privileges');
 const copyPrivilages = '/api/privileges/v2/copy'
 const getUids = '/api/forum/v2/uids';
 const addUserIntoGroup = '/api/forum/v3/group/membership';
+const groupsPriveleges = '/api/forum/v3/category/:cid/privileges';
 const oidcPlugin = require.main.require('./node_modules/nodebb-plugin-sunbird-oidc/library.js');
 const Settings = require.main.require('./src/settings');
 const listOfGroupUsers = '/api/forum/v3/groups/users';
@@ -91,6 +92,11 @@ var constants = {
   'get': 'GET',
   'put': 'PUT',
   'apiPrefix': '/api',
+  'emptyGroupsMsg': "Groups and CID should not be empty",
+  'incorrectCid': 'Category id ${cid} is not exists, Please use correct cid',
+  'emptyDataFOrGroupsAndMembers': 'Groups and members should not be empty',
+  'noGroupAddedMsg': '${group} was not added for the category id ${cid}, please add and try again.',
+  'emptyDataForGroups':'You have to pass both sbUid and sbUserName',
   'pluginSettings': new Settings('fusionauth-oidc', '1.0.0', {
     // Default settings
     clientId: null,
@@ -1039,7 +1045,7 @@ async function relatedDiscussions (req, res) {
               const mappedCids = await sbCategoryModel.find({sbIdentifier: context[i].identifier, sbType: context[i].type})
               const listOfCids = mappedCids.map(forum => forum.cid);
               const mapResObj = {
-                "sbType": context[i].identifier,
+                "sbType": context[i].type,
                 "sbIdentifier": context[i].identifier,
                 "newCid": cdata.payload.cid,
                 "cids": listOfCids
@@ -1226,44 +1232,81 @@ async function copyPrivilegesFromCategory(req, body, upstremUrl) {
 async function addUsers(req, res) {
   const payload = { ...req.body.request };
   const groupsList = payload.groups;
-  const sunbirdUsers = payload.sbUsers;
-  sunbirdUsers.forEach(async (user, index) => {
-    let nodebbUid = await db.getObjectField(constants.name + 'Id:uid', user.identifier);
-    if(!nodebbUid) {
-        nodebbUid = await createNewUser(user);
+  const sunbirdUsers = payload.members;
+  let userList = [];
+    if(groupsList && groupsList.length > 0 && sunbirdUsers && sunbirdUsers.length > 0) {
+      sunbirdUsers.forEach(async (user, index) => {
+        let nodebbUid = await db.getObjectField(constants.name + 'Id:uid', user.sbUid);
+        if(!nodebbUid) {
+          try {
+            nodebbUid = await createNewUser(user);
+          } catch(error) {
+            console.log(error)
+            error.statusCode = 400;
+            res.send(responseData(req,res,addUserIntoGroup,null, error));
+            return false;
+          }
+        }
+        console.log("Uid : ", nodebbUid)
+        const addIntoGroups = await addUsersInGroup(groupsList, nodebbUid);
+        if (index === (sunbirdUsers.length -1)) {
+          const groupsData = await Groups.getMembersOfGroups(groupsList);
+          if(groupsData && groupsData.length > 0) {
+            groupsData.forEach(async (groupUsers, i) => {
+              let data = {
+                name: groupsList[i]
+              };
+              if(groupUsers && groupUsers.length > 0){
+                data['members'] = await getUserDetails(groupUsers);
+              } else {
+                data['members'] = []
+              }
+              userList.push(data);
+              if(i === (groupsData.length -1)) {
+                const result = {
+                  groups: userList
+                };
+                  res.send(responseData(req,res,addUserIntoGroup,result, null));
+              }
+            });
+          }
+        }
+      }) 
+    } else {
+      const errorMsg = new Error(constants.emptyDataFOrGroupsAndMembers);
+      errorMsg.statusCode = 400;
+      res.send(responseData(req,res,addUserIntoGroup,null, errorMsg));
     }
-    console.log("Uid : ", nodebbUid)
-    const addIntoGroups = await addUsersInGroup(groupsList, nodebbUid);
-    if(index === (sunbirdUsers.length -1)) {
-      const result = {code: "ok"}
-      res.send(responseData(req,res,addUserIntoGroup,result, null));
-    }
-  })
 }
 
 // creating new user using nodebb-plugin-sunbird-oidc plugin
 function createNewUser(user) {
   return new Promise((resolve, reject) => {
-    const settings = constants.pluginSettings.getWrapper();
-    var email = user.username + '@' + settings.emailDomain;
-    const userPayload = {
-      username: user.username,
-      oAuthid: user.identifier,
-      email: email,
-      rolesEnabled: settings.rolesClaim && settings.rolesClaim.length !== 0,
-      isAdmin: false,
-    }
-    console.log(oidcPlugin)
-    oidcPlugin.login(userPayload, (err, user) => {
-      if(err && err === 'UserExists') {
-        resolve(user.uid);
-        return;
-      } else if(user) {
-        resolve(user.uid);
-      } else {
-        reject(err);
+    if(user.sbUserName && user.sbUid) {
+      const settings = constants.pluginSettings.getWrapper();
+      var email = user.sbUserName + '@' + settings.emailDomain;
+      const userPayload = {
+        username: user.sbUserName,
+        oAuthid: user.sbUid,
+        email: email,
+        rolesEnabled: settings.rolesClaim && settings.rolesClaim.length !== 0,
+        isAdmin: false,
       }
-    });
+      console.log(oidcPlugin)
+      oidcPlugin.login(userPayload, (err, user) => {
+        if(err && err === 'UserExists') {
+          resolve(user.uid);
+          return;
+        } else if(user) {
+          resolve(user.uid);
+        } else {
+          reject(err);
+        }
+      });
+    } else {
+      const errorMessage = {message: constants.emptyDataForGroups};
+      reject(errorMessage)
+    }
   })
 }
 
@@ -1278,7 +1321,6 @@ function addUsersInGroup(groups, uid) {
           name: group
         });
       }
-      const isGroupMember = await Groups.isMember(uid, group)
       const joinIntoGroup = await Groups.join([group], uid);
       if(i === (groups.length -1)) {
         resolve({code: "ok"})
@@ -1338,6 +1380,45 @@ async function getUserDetails(groupUsers) {
   })
 }
 
+async function getGroupPriveleges(req, res) {
+  const payload = {...req.body.request};
+  const groups = payload.groups;
+  const cid = req.params.cid;
+  if (cid && groups && groups.length > 0) {
+    const isCidExist = await Categories.exists(cid);
+    let groupsData = [];
+    if(isCidExist) {
+      const groupsList= await privileges.categories.list(cid);
+      groups.forEach((group, index) => {
+        const cgroup = groupsList.groups.filter(data => data.name.toLowerCase() === group.toLowerCase());
+        if (cgroup && cgroup.length > 0) {
+          groupsData.push(cgroup[0])
+        } else {
+          const noGroup = {
+            name: group,
+            message: (constants.noGroupAddedMsg.replace('${group}', group)).replace('${cid}', cid)
+          }
+          groupsData.push(noGroup);
+        }
+        if(index === (groups.length -1)) {
+          const result = {
+            groups: groupsData
+          }
+          res.send(responseData(req,res,groupsPriveleges,result,null));
+        }
+      })
+    } else {
+      const cidError = new Error(constants.incorrectCid.replace('${cid}', cid));
+      cidError.statusCode = 400;
+      res.send(responseData(req,res,groupsPriveleges,null,cidError));
+    }
+  } else {
+    const dataError = new Error(constants.emptyGroupsMsg);
+    dataError.statusCode = 400;
+    res.send(responseData(req,res,groupsPriveleges,null,dataError));
+  }
+}
+
 Plugin.load = function (params, callback) {
   var router = params.router
 
@@ -1351,6 +1432,8 @@ Plugin.load = function (params, callback) {
   router.post(getUids, getUserIds);
   router.post(addUserIntoGroup, addUsers);
   router.post(listOfGroupUsers, getUserGroups);
+  router.post(groupsPriveleges, getGroupPriveleges);
+
   router.post(
     createForumURL,
     apiMiddleware.requireUser,
