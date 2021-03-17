@@ -34,6 +34,7 @@ const getSBForum= '/api/forum/v2/read';
 const removeSBForum = '/api/forum/v2/remove';
 const createRelatedDiscussions = '/api/forum/v3/create';
 const privileges = require.main.require('./src/privileges');
+const _ = require('lodash');
 const copyPrivilages = '/api/privileges/v2/copy'
 const getUids = '/api/forum/v2/uids';
 const addUserIntoGroup = '/api/forum/v3/group/membership';
@@ -856,6 +857,13 @@ function getSBForumFunc (req, res) {
     resObj.errmsg = error.message;
     res.send(responseMessage.errorResponse(resObj));
   });
+  } else {
+    resObj.status = 'failed';
+    resObj.resCode = 'Request payload error';
+    resObj.err = 400;
+    resObj.errmsg = 'Type and identifier required parameters';
+    res.status(400);
+    res.send(responseMessage.errorResponse(resObj));
   }
 }
 
@@ -885,6 +893,7 @@ function removeSBForumFunc (req, res) {
       resObj.resCode = 'SERVER_ERROR';
       resObj.errmsg = "Invalid input parameter | Data does not exist";
       resObj.err = "404"
+      res.status(404);
       res.send(responseMessage.errorResponse(resObj));
     }
   }).catch(error => {
@@ -900,18 +909,18 @@ function removeSBForumFunc (req, res) {
 
 async function getListOfCategories(req, res) {
   const payload = { ...req.body.request };
-  if(payload) {
-    console.log('req url', );
-  const cids = payload.cids;
-  const path = req.originalUrl.replace(constants.key, '');
-  const url = `${req.protocol}://${req.get('host')}${path}`;
-  let allCategories = [];
   let resObj = {
     id: constants[categoryList],
     status: constants.statusSuccess,
     resCode: constants.resCode,
     data: null
   }
+
+  if(!_.isEmpty(payload) && !_.isEmpty(payload.cids)) {
+  const cids = payload.cids;
+  const path = req.originalUrl.replace(constants.key, '');
+  const url = `${req.protocol}://${req.get('host')}${path}`;
+  let allCategories = [];
   for(let i = 0; i < cids.length; i++) {
     const options = {
       uri: url+cids[i],
@@ -937,6 +946,13 @@ async function getListOfCategories(req, res) {
         res.send(responseMessage.errorResponse(resObj));
       }
     }
+  } else {
+    res.statusCode = 400;
+    resObj.status = constants.failed;
+    resObj.resCode = constants.errorResCode;
+    resObj.err = 400;
+    resObj.errmsg = "Cids is required parameter";
+    res.send(responseMessage.errorResponse(resObj));
   }
 }
 
@@ -948,7 +964,7 @@ async function getTagsRelatedTopics(req,res) {
     resCode: constants.resCode,
     data: null
   }
-  if (payload) {
+  if (!_.isEmpty(payload) && !_.isEmpty(payload.tag) && !_.isEmpty(payload.cid)) {
     const tag = payload.tag;
     const cid = payload.cid;
     const path = req.originalUrl.replace(constants.key, '');
@@ -973,6 +989,13 @@ async function getTagsRelatedTopics(req,res) {
       resObj.errmsg = error.message;
       res.send(responseMessage.errorResponse(resObj));
     }
+  } else {
+    res.statusCode = 400;
+    resObj.status = constants.failed;
+    resObj.resCode = constants.errorResCode;
+    resObj.err = 400;
+    resObj.errmsg = "Tag and Cid are required parameters";
+    res.send(responseMessage.errorResponse(resObj));
   }
 }
 
@@ -995,7 +1018,7 @@ async function userDetails(sbIds) {
     try {
       sbIds.forEach(async (sbId, index) => {
         const userId = await db.getObjectField(constants.name + 'Id:uid', sbId);
-        if (userId == null) {
+        if (userId === null) {
           const error = new Error("uid not found");
           error.statusCode = 400;
           reject(error);
@@ -1012,105 +1035,261 @@ async function userDetails(sbIds) {
   })
 }
 
+/**
+ * @param  {} req
+ * @param  {} res
+ * this the generalization of api for course and groups
+ */
 async function relatedDiscussions (req, res) {
     const payload = { ...req.body.category };
-    if (payload) {
-      console.log('Creating new category')
-        // creating payload for category 
-        const body = {
-          parentCid: payload.pid,
-          name: payload.name || constants.defaultCategory
-        };
-        // category request url
-        const categoryUrl = `${constants.createCategory}?_uid=${payload.uid}`
-        // making api call to create category
-        const cdata = await getResponseData(req, categoryUrl, createRelatedDiscussions, body, constants.post);
-        
-        if(cdata && cdata.payload) {
-          console.log('category created successfully and category id is', cdata.payload.cid)
-          const context = payload.context;
-          if(context && context.length > 0) {
-            let forumIds = [];
-            for(let i=0; i < context.length; i++) {
-              // mapping cid with context
-              const isCidMapped = await sbCategoryModel.find({sbIdentifier: context[i].identifier, sbType: context[i].type})
-              let mapObj = {
-                    sbIdentifier: context[i].identifier,
-                    sbType: context[i].type,
-                    cid: cdata.payload.cid
-                }
-              const SbObj = new sbCategoryModel(mapObj);
-              const mapResponse = await SbObj.save();
-              // getting all mapped cids for a context
-              const mappedCids = await sbCategoryModel.find({sbIdentifier: context[i].identifier, sbType: context[i].type})
-              const listOfCids = mappedCids.map(forum => forum.cid);
-              const mapResObj = {
-                "sbType": context[i].type,
-                "sbIdentifier": context[i].identifier,
-                "newCid": cdata.payload.cid,
-                "cids": listOfCids
-              }
-              forumIds.push(mapResObj);
-              if(i === (context.length - 1)){
-                const result = {forums: forumIds};
-                console.log(result)
-                res.send(responseData(req,res,createRelatedDiscussions,result, null)); 
-              }
-            }
-            // copy privileges from a category 
-           if(payload.privileges.copyFromCategory){
-              const result = await Categories.copyPrivilegesFrom(payload.privileges.copyFromCategory, cdata.payload.cid);
-            }
-
-            // creating sub categories, adding groups and enable privilages
-            if(payload.subcategories && payload.subcategories.length > 0) {
-              console.log("sub categories")
-              const subcategories = payload.subcategories;
-              subcategories.forEach(async (category) => {
-                const categoryObj = {
-                  name: category.name,
-                  parentCid: cdata.payload.cid
-                }
-               const creatSubCategory =  await Categories.create(categoryObj);
-               
-              //  mapping category id for a context
-                if(category.context && category.context.length > 0) {
-                    category.context.forEach(async (context) => {
-                      const contextObj = {
-                        "sbType": context.type,
-                        "sbIdentifier": context.identifier,
-                        "cid": creatSubCategory.cid
-                      }
-                      const SbObj = new sbCategoryModel(contextObj);
-                      const mapResponse = await SbObj.save();
-                    })
-                }
-
-                //  Adding privileges to sub-categories from a selected category id
-                  if (category.privileges && category.privileges.copyFromCategory) {
-                    const result = await Categories.copyPrivilegesFrom(category.privileges.copyFromCategory, creatSubCategory.cid);
-                  }
-              })
-            }
+    if (!_.isEmpty(payload)) {
+          let privilegesError;
+          // checking of both privileges and groups present
+         if (!_.isEmpty(payload.groups) && !_.isEmpty(payload.privileges)) {
+            privilegesError = new Error("Request have both groups and privileges but request should contain either groups or privileges");
+            privilegesError.statusCode = 400;
+            res.send(responseData(req,res,createRelatedDiscussions,null, privilegesError));
           } else {
-            const contextError = new Error("Bad context data");
-            contextError.statusCode = 400;
-            res.send(responseData(req,res,createRelatedDiscussions,null, contextError));
+            let finalResponse = {};
+            // creating a category
+            const body = {
+              parentCid: payload.pid || 0,
+              name: payload.name || constants.defaultCategory,
+              description: _.get(payload, 'description') 
+            };
+            const cdata = await Categories.create(body);
+
+           if(cdata) {
+            console.log('Creating new category')
+              const context = payload.context;
+              // checking for context
+              if(!_.isEmpty(context)) {
+                // add category id with a context
+                finalResponse['forums'] = await addContext(context, cdata.cid);
+                
+                // checking for privileges 
+                if(payload.privileges && !_.isEmpty(payload.privileges.copyFromCategory)){
+                  // coping privileges from selected category id
+                  const result = await Categories.copyPrivilegesFrom(payload.privileges.copyFromCategory, cdata.cid);
+                  // getting groups and users present in groups 
+                  const members = await getMembers(cdata.cid);
+                  finalResponse['groups'] = members;
+                  try{
+                    // check for sub categories
+                    const subCategory = await checkSubcategories(payload.subcategories, cdata.cid);
+                    finalResponse.subcategories = subCategory;
+                    res.send(finalResponse)
+                  } catch(error) {
+                      res.send(responseData(req,res,createRelatedDiscussions,null, error));
+                  }
+                } else if(!_.isEmpty(payload.groups)) {  // checking for groups
+                  const addPrivileges = await groupsAndPrivileges(cdata.cid, payload.groups);
+                  const members = await getMembers(cdata.cid);
+                  finalResponse['groups'] = members;
+                  try{
+                    // check for subcategories
+                    const subCategory = await checkSubcategories(payload.subcategories, cdata.cid);
+                    finalResponse.subcategories = subCategory;
+                    res.send(finalResponse)
+                  } catch(error) {
+                    res.send(responseData(req,res,createRelatedDiscussions,null, error));
+                  }
+                } else {
+                  res.send(finalResponse)
+                }
+              } else {
+                const contextError = new Error("Bad context data");
+                contextError.statusCode = 400;
+                res.send(responseData(req,res,createRelatedDiscussions,null, contextError));
+              }              
+          } else {
+            console.log('category creation failed')
+            console.log('Error is', cdata.message)
+            res.send(responseData(req,res,createRelatedDiscussions,null, cdata));
           }
-        } else {
-          console.log('category creation failed')
-          console.log('Error is', cdata.message)
-          res.send(responseData(req,res,createRelatedDiscussions,null, cdata));
-        } 
+      }
+    } else {
+      const dataError = new Error("Category is required parameter");
+      dataError.statusCode = 400;
+      res.send(responseData(req,res,createRelatedDiscussions,null, dataError));
     }
 }
 
-async function groupsAndPrivileges(req, groupData){
+/**
+ * @param  {} context
+ * @param  {} cid
+ * This method will map a category id with a context object and return's
+ *  a response as array
+ * Example:
+ * [{
+      "sbType": string,
+      "sbIdentifier": string,
+      "newCid": number,
+      "cids": array
+    }]
+ */
+async function addContext(context, cid) {
+  const forumIds = [];
+  return new Promise((resolve, reject) => {
+    context.forEach(async (contextData, i) => {
+      const addPropertyInCategory = await Categories.setCategoryField(cid, 'contextId', contextData.identifier);
+      // Preparing request object
+        let mapObj = {
+          sbIdentifier: contextData.identifier,
+          sbType: contextData.type,
+          cid: cid
+        }
+        const SbObj = new sbCategoryModel(mapObj);
+        const mapResponse = await SbObj.save(); // save the request object into mongo collection
+        // fetching already mapped category id's
+        const mappedCids = await sbCategoryModel.find({sbIdentifier: contextData.identifier, sbType: contextData.type})
+        const listOfCids = mappedCids.map(forum => forum.cid);
+        // Preparing the response object
+        const mapResObj = {
+          "sbType": contextData.type,
+          "sbIdentifier": contextData.identifier,
+          "newCid": cid,
+          "cids": listOfCids
+        }
+        forumIds.push(mapResObj);
+        if(i === (context.length - 1)){ 
+          resolve(forumIds)
+        }
+    });
+  });
+}
+
+async function checkSubcategories(subcategories, cid) {
   return new Promise(async (resolve, reject) => {
-    const payload = groupData;
-    const groups = payload.groups;
-    const uid = payload.uid;
-    const cid = payload.cid;
+    if(!_.isEmpty(subcategories)) {
+      try {
+        const addingSubcategory = await addSubcategories(subcategories, cid);
+        resolve(addingSubcategory)
+      } catch(error) {
+        reject(error)
+      }
+    } else {
+      resolve([]);
+    }
+  })
+}
+
+async function addSubcategories(subCategories, pid) {
+  let subCategoryResponse =[];
+  return new Promise((resolve, reject) => {
+    subCategories.forEach(async (category, index) => {
+      let privilegesError;
+     if (!_.isEmpty(category.groups) && !_.isEmpty(category.privileges)) {
+        privilegesError = new Error("Subcategories should contain either groups or privileges but not both");
+        privilegesError.statusCode = 400;
+        reject(privilegesError);
+      } else {
+          const categoryObj = {
+            name: category.name,
+            parentCid: pid,
+            description: _.get(category, 'description') 
+          };
+          const creatSubCategory =  await Categories.create(categoryObj);
+          const data = {
+            name: creatSubCategory.name,
+            cid: creatSubCategory.cid,
+            pid: pid,
+            groups: []
+          };
+
+          // Mapping the context if exists for sub category 
+          if(!_.isEmpty(category.context)) {
+            category.context.forEach(async (context) => {
+              const addPropertyInCategory = await Categories.setCategoryField(creatSubCategory.cid, 'contextId', context.identifier);
+              const contextObj = {
+                "sbType": context.type,
+                "sbIdentifier": context.identifier,
+                "cid": creatSubCategory.cid
+              }
+              const SbObj = new sbCategoryModel(contextObj);
+              const mapResponse = await SbObj.save();
+            })
+          }
+          
+          //  checking for privileges 
+          if(category.privileges && category.privileges.copyFromParent){
+            const result = await Categories.copyPrivilegesFrom(pid, creatSubCategory.cid);
+            data['groups'] = await getMembers(creatSubCategory.cid);
+            subCategoryResponse.push(data);
+            if(index === (subCategories.length -1)) {
+              resolve(subCategoryResponse)
+            } 
+          }else if(!_.isEmpty(category.groups)) {
+            const addPrivileges = await groupsAndPrivileges(creatSubCategory.cid, category.groups);
+            data['groups'] = await getMembers(creatSubCategory.cid);
+            subCategoryResponse.push(data);
+            if(index === (subCategories.length -1)) {
+              resolve(subCategoryResponse)
+            }
+          } else {
+            subCategoryResponse.push(data);
+            if(index === (subCategories.length -1)) {
+              resolve(subCategoryResponse)
+            }
+          }
+
+      }
+    });
+  })
+}
+
+/**
+ * @param  {} cid
+ * This method will fetch groups added for a particuler category and users exists in a groups
+ * Response 
+ * Example
+ * [
+  * {
+  * name: groupName(string),
+  * members: [
+  * {
+  *   "uid": number,
+      "userName": string,
+      "sbUid": string
+  * }
+  ......
+    ]
+  * }
+  ......
+ * ]
+ */
+async function getMembers(cid) {
+  // getting the groups list added for a category
+  const groupsList = await privileges.categories.list(cid);
+  const categoryGroups = groupsList.groups.map(group => group.name);
+  // fetching nodebb uids added in all groups 
+  const groupsData = await Groups.getMembersOfGroups(categoryGroups);
+  let userList = [];
+  return new Promise((resolve, reject) => {
+    if(!_.isEmpty(groupsData)) {
+      groupsData.forEach(async (groupUsers, i) => {
+        let data = {
+          name: categoryGroups[i]
+        };
+        if(groupUsers && groupUsers.length > 0){
+          // getting nodebb user details by passing nodebb uids
+          data['members'] = await getUserDetails(groupUsers);
+        } else {
+          data['members'] = [];
+        }
+        userList.push(data);
+        if(i === (groupsData.length -1)) {
+          resolve(userList);
+        }
+      });
+    } else {
+      resolve(userList)
+    }
+  })
+}
+
+async function groupsAndPrivileges(cid, groups){
+  return new Promise(async (resolve, reject) => {
     for (let i=0; i < groups.length; i++){
       const groupData = groups[i];
       const isGroupExists = await Groups.exists(groupData.name);
@@ -1119,17 +1298,12 @@ async function groupsAndPrivileges(req, groupData){
           name: groupData.name
         });
       }
-        const reqBody = {
-          "privileges": groupData.privileges,
-          "groups": [ groupData.name ]
-        }
-        const addGroupAndPrivileges = await getResponseData(req, `${constants.createPrivileges}?_uid=${uid}`.replace(':cid', cid), createRelatedDiscussions, reqBody , constants.put);
+        const addGroupAndPrivileges = await privileges.categories.give(groupData.privileges, cid, groupData.name)
         try {
         const nodebbUids = await userDetails(groupData.sbUids);
         for(let j=0; j < nodebbUids.length; j++){
           const groupSlug = await Groups.getGroupField(groupData.name, 'slug');
-          const membershipUrl = `${constants.addUserIntoGroup}?_uid=${uid}`.replace(':slug', groupSlug);
-          getResponseData(req, membershipUrl.replace(":uid", nodebbUids[j]['nodebbUid']), createRelatedDiscussions, null , constants.put)
+         const addUserIntoGroups = await Groups.join(groupData.name, nodebbUids[j]['nodebbUid']);
         }
       } catch(error) {
         console.log(error)
@@ -1188,13 +1362,18 @@ async function getResponseData(req, url, upstremUrl, payload, method) {
 }
 
 async function copyPrivilegeData(req, res) {
-  const payload = { ...req.body };
-  const privilegesCopied = await copyPrivilegesFromCategory(req, payload, copyPrivilages);
-  if (privilegesCopied && (privilegesCopied.statusCode)) {
-    res.send(responseData(req,res,copyPrivilages,null, privilegesCopied));
-    return;
+  const payload = { ...req.body.request };
+  if (!_.isEmpty(payload) && !_.isEmpty(payload.pid) && !_.isEmpty(payload.cid)) {
+    const fromCid = payload.pid;
+    const toCid = payload.cid;
+    const copyPrivilege = await Categories.copyPrivilegesFrom(fromCid, toCid);
+    const result = "Privileges copied successfuly"
+    res.send(responseData(req,res,copyPrivilages,result, null));
+  } else{
+    const error = new Error("Pid and cid required parameters");
+    error.statusCode = 400;
+    res.send(responseData(req,res,copyPrivilages,null, error))
   }
-  res.send(responseData(req,res,copyPrivilages,privilegesCopied, null));
 }
 
 async function copyPrivilegesFromCategory(req, body, upstremUrl) {
@@ -1362,10 +1541,23 @@ async function getUserGroups(req, res) {
   }
 }
 
+
+/**
+ * @param  {} groupUsers
+ * input: groupUsers = [1,2,3] nodebb uids
+ * response : [
+ *  {
+ *      uid: number,
+ *      userName: string,
+ *      sbUid: string
+ *  }
+ * ]
+ */
 async function getUserDetails(groupUsers) {
   const users = [];
   return new Promise((resolve, reject) => {
     groupUsers.forEach(async (uid, i) => {
+      // fetching the user details bu passing uid
       const userDetails = await Users.getUserData(uid)
       const data = {
         "uid": userDetails.uid,
@@ -1419,6 +1611,14 @@ async function getGroupPriveleges(req, res) {
   }
 }
 
+async function getCategories(req, res) {
+  const payload = { ...req.body.request };
+  const data = await Categories.getAllCategoryFields(['contextId', 'cid'])
+  const result = data.filter(x => x.contextId === payload.identifier);
+  res.send(result)
+}
+
+
 Plugin.load = function (params, callback) {
   var router = params.router
 
@@ -1433,6 +1633,7 @@ Plugin.load = function (params, callback) {
   router.post(addUserIntoGroup, addUsers);
   router.post(listOfGroupUsers, getUserGroups);
   router.post(groupsPriveleges, getGroupPriveleges);
+  router.post('/api/forum/v3/categories', getCategories);
 
   router.post(
     createForumURL,
