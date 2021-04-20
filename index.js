@@ -16,6 +16,7 @@ const getForumURL = '/api/forum/v1/read'
 const categoryList = '/api/category/list';
 const requestPromise = require('request-promise');
 const tagsList = '/api/tags/list'
+const contextBasesTags = '/api/forum/tags'
 const utils = require('./utils')
 const allTopicsByCategoryURL = '/api/category/v1/topic'
 const allPostsByTopicURL = '/api/topic/v1/posts'
@@ -941,6 +942,61 @@ async function getTagsRelatedTopics(req,res) {
   }
 }
 
+
+
+async function getContextBasedTags (req, res) {
+  const payload = { ...req.body.request }
+  let resObj = {
+    id: constants[contextBasesTags],
+    status: constants.statusSuccess,
+    resCode: constants.resCode,
+    data: null
+  }
+  if (payload) {
+    const cids = payload.cids
+    const path = req.originalUrl.replace(constants.key, '')
+    const url = `${req.protocol}://${req.get('host')}/api/category/`
+    let allTopics = [],
+      allTags = []
+
+    for (let i = 0; i < cids.length; i++) {
+      const options = {
+        uri: url + cids[i],
+        json: true
+      }
+      try {
+        const data = await requestPromise(options)
+        allTopics.push(...data.topics)
+        if (i === cids.length - 1) {
+          allTopics.filter((val, inx) => {
+            if (val.tags.length) {
+              allTags.push(...val.tags)
+            }
+          })
+
+          const tagData = new Map(
+            allTags.map(tag => [tag.value, { ...tag, score: 0 }])
+          )
+          for (const { value } of allTags) tagData.get(value).score++
+          const result = Array.from(tagData.values())
+
+          resObj.data = result
+          res.send(responseMessage.successResponse(resObj))
+        }
+      } catch (error) {
+        console.log({ message: `Error while call the api ${options.url}` })
+        console.log({ message: `Error message:  ${error.message}` })
+        res.statusCode = 404
+        resObj.status = constants.failed
+        resObj.resCode = constants.errorResCode
+        resObj.err = error.status
+        resObj.errmsg = error.message
+        res.send(responseMessage.errorResponse(resObj))
+      }
+    }
+  }
+}
+
 /**
  * @param {*} req 
  * @param {*} res
@@ -1282,13 +1338,13 @@ Plugin.load = function (params, callback) {
   router.post(removeSBForum, removeSBForumFunc)
   router.post(categoryList, getListOfCategories);
   router.post(tagsList, getTagsRelatedTopics);
+  router.post(contextBasesTags, getContextBasedTags)
   router.post(createRelatedDiscussions, relatedDiscussions);
   router.post(copyPrivilages, copyPrivilegeData);
   router.post(getUids, getUserIds);
   router.post(addUserIntoGroup, addUsers);
   router.post(listOfGroupUsers, getContextUserGroups);
   router.post(groupsPriveleges, getContextGroupPriveleges);
-  // router.post('/api/forum/v3/categories', getCategories);
 
   router.post(
     createForumURL,
