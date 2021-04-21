@@ -76,6 +76,8 @@ const { default: Axios } = require('axios')
 var constants = {
   'name': 'sunbird-oidc',
   'key': 'list',
+  'category': '/category',
+  'tags': '/tags',
   'errorResCode': 'SERVER_ERROR',
   'payloadError': "Request payload error",
   'resCode': 'OK',
@@ -115,7 +117,6 @@ var constants = {
   }, false, false),
 }
 
-console.log(util)
 
 async function createTopicAPI (req, res) {
   var payload = { ...req.body.request }
@@ -885,24 +886,18 @@ async function getListOfCategories(req, res) {
   const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, payload);
   if(isRequiredParamsMissing) {
     const cids = payload.cids;
-    const path = req.originalUrl.replace(constants.key, '');
-    const url = `${req.protocol}://${req.get('host')}${path}`;
     let allCategories = [];
     for(let i = 0; i < cids.length; i++) {
-      const options = {
-        uri: url+cids[i],
-        method: 'GET',
-        json: true
-      };
         try {
-          const data = await requestPromise(options);
-            allCategories.push(data);
+          const url = constants.category+ '/' + cids[i];
+          const data = await util.getResponseData(req, url, categoryList, null, constants.get);
+          allCategories.push(data);
             if (i === (cids.length -1)) {
               const responseObj = await util.responseData(req, res, allCategories, null);
               res.send(responseObj);
             }
         } catch(error) {
-          console.log({message: `Error while call the api ${options.url}`})
+          console.log({message: `Error while call the api`})
           console.log({message: `Error message:  ${error.message}`})
           util.generateError(req, res, error.message, 404);
         }
@@ -920,22 +915,14 @@ async function getTagsRelatedTopics(req,res) {
   const requiredParams = jsonConstants.requiredParams[req.route.path];
   const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, payload);
   if (isRequiredParamsMissing) {
-    const tag = payload.tag;
-    const cid = payload.cid;
-    const path = req.originalUrl.replace(constants.key, '');
-    const url = `${req.protocol}://${req.get('host')}${path}${tag}`;
-    const options = {
-      uri: url,
-      method: 'GET',
-      json: true
-    };
     try {
-      const data = await requestPromise(options);
-      const releatedTopics = data.topics.filter(topic => cid.includes(topic.cid));
+      const url = constants.tags+ '/' + payload.tag;
+      const data = await util.getResponseData(req, url, tagsList, null, constants.get);
+      const releatedTopics = data.topics.filter(topic => payload.cid.includes(topic.cid));
       const responseObj = await util.responseData(req, res, releatedTopics, null);
       res.send(responseObj);
     } catch(error) {
-      console.log({message: `Error while call the api ${options.url}`})
+      console.log({message: `Error while call the api`})
       console.log({message: `Error message:  ${error.message}`})
       util.generateError(req, res, error.message, 500);
     }
@@ -953,19 +940,14 @@ async function getContextBasedTags (req, res) {
     data: null
   }
   if (payload) {
-    const cids = payload.cids
-    const path = req.originalUrl.replace(constants.key, '')
-    const url = `${req.protocol}://${req.get('host')}/api/category/`
+    const cids = payload.cids;
     let allTopics = [],
       allTags = []
 
     for (let i = 0; i < cids.length; i++) {
-      const options = {
-        uri: url + cids[i],
-        json: true
-      }
       try {
-        const data = await requestPromise(options)
+        const url = constants.category+ '/' + cids[i];
+        const data = await util.getResponseData(req, url, contextBasesTags, null, constants.get);
         allTopics.push(...data.topics)
         if (i === cids.length - 1) {
           allTopics.filter((val, inx) => {
@@ -1328,6 +1310,16 @@ async function getContextGroupPriveleges(req, res) {
 //   const result = data.filter(x => x.contextId === payload.identifier);
 //   res.send(result)
 // }
+
+async function test123(req, res, next) {
+  req.body.request.cid.forEach(async (cid) => {
+    req.params.category_id = cid;
+    const data =  await categoryController.get(req,res,next);
+  })
+
+//  console.log(data);
+//  res.send(data)
+}
 
 
 Plugin.load = function (params, callback) {
