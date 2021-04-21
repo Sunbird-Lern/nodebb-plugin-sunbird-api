@@ -1311,16 +1311,6 @@ async function getContextGroupPriveleges(req, res) {
 //   res.send(result)
 // }
 
-async function test123(req, res, next) {
-  req.body.request.cid.forEach(async (cid) => {
-    req.params.category_id = cid;
-    const data =  await categoryController.get(req,res,next);
-  })
-
-//  console.log(data);
-//  res.send(data)
-}
-
 
 Plugin.load = function (params, callback) {
   var router = params.router
