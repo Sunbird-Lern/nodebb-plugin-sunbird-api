@@ -1311,6 +1311,17 @@ async function getContextGroupPriveleges(req, res) {
 //   res.send(result)
 // }
 
+async function getUserDetails(req, res) {
+  const userslug = req.params.userslug;
+  if (!_.isEmpty(userslug)) {
+    const uid = await Users.getUidByUserslug(userslug);
+    const userDetails = await Users.getUserData(uid);
+    res.send(userDetails);
+  } else {
+    util.generateError(req, res, "Userslug is mandatory", 400);
+  }
+}
+
 
 Plugin.load = function (params, callback) {
   var router = params.router
@@ -1327,6 +1338,8 @@ Plugin.load = function (params, callback) {
   router.post(addUserIntoGroup, addUsers);
   router.post(listOfGroupUsers, getContextUserGroups);
   router.post(groupsPriveleges, getContextGroupPriveleges);
+
+  router.get('/api/forum/test/user/:userslug', getUserDetails);
 
   router.post(
     createForumURL,
