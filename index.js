@@ -43,35 +43,10 @@ const groupsPriveleges = '/api/forum/v3/category/:cid/privileges';
 const oidcPlugin = require.main.require('./node_modules/nodebb-plugin-sunbird-oidc/library.js');
 const Settings = require.main.require('./src/settings');
 const listOfGroupUsers = '/api/forum/v3/groups/users';
-const configData = require.main.require('./config.json')
-const mongoose = require('mongoose');
-const { Schema } = mongoose;
-const forumSchema = new Schema({ 
-    sbType: String,
-    cid: Number,
-    sbIdentifier: String 
-  });
 const jsonConstants = require('./lib/constants');
-const util = require('./lib/utils');  
-
-// MongoDB connection 
-if (_.get(configData, 'mongo.host')) {
-  const mongodbConnectionUrl =  `mongodb://${_.get(configData, 'mongo.host')}:${_.get(configData, 'mongo.port')}/${_.get(configData,'mongo.database')}`;
-  mongoose.connect(mongodbConnectionUrl);
-  const sbCategoryModel = mongoose.model('sbcategory', forumSchema);
-  console.log('SB config Json: ', configData);
-  console.log('SB Mongo URL: ', mongodbConnectionUrl)
-  
-}
-
-// Redis connection
-const redisConnection = require.main.require('./src/database/redis/connection');
-configData.redis.database = '2';
-const redis = redisConnection.connect(configData.redis);
-const redisClient = {'client' : redis};
-require.main.require('./src/database/redis/hash')(redisClient);
-require.main.require('./src/database/redis/main')(redisClient);
-require.main.require('./src/database/redis/promisify')(redisClient.client);
+const util = require('./lib/utils');
+const redisClient = require('./database/redis');
+const sbCategoryModel = require('./database/mongo');
 
 const {
   createCategory,
