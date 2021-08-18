@@ -43,21 +43,11 @@ const groupsPriveleges = '/api/forum/v3/category/:cid/privileges';
 const oidcPlugin = require.main.require('./node_modules/nodebb-plugin-sunbird-oidc/library.js');
 const Settings = require.main.require('./src/settings');
 const listOfGroupUsers = '/api/forum/v3/groups/users';
-const configData = require.main.require('./config.json')
-const mongoose = require('mongoose');
-const { Schema } = mongoose;
-const forumSchema = new Schema({ 
-    sbType: String,
-    cid: Number,
-    sbIdentifier: String 
-  });
 const jsonConstants = require('./lib/constants');
-const util = require('./lib/utils');  
-const mongodbConnectionUrl =  `mongodb://${configData.mongo.host}:${configData.mongo.port}/${configData.mongo.database}`;
-mongoose.connect(mongodbConnectionUrl);
-const sbCategoryModel = mongoose.model('sbcategory', forumSchema);
-console.log('SB config Json: ', configData);
-console.log('SB Mongo URL: ', mongodbConnectionUrl)
+const util = require('./lib/utils');
+const redisClient = require('./database/redis');
+const sbCategoryModel = require('./database/mongo');
+
 const {
   createCategory,
   createCategory_check,
@@ -825,7 +815,7 @@ async function createSBForumFunc (req, res) {
 }
 
 /**
- * This function return the category id's based on the id and type.
+ * This function return the category id's from mongoDB based on the id and type.
  * @param {*} req 
  * @param {*} res 
  */
@@ -850,7 +840,7 @@ async function getSBForumFunc (req, res) {
 }
 
 /**
- * This function will remove the  the category ids based on the sb_id and sb_type.
+ * This function will remove the  the category ids from mongoDB based on the sb_id and sb_type.
  * @param {*} req 
  * @param {*} res 
  */
@@ -1086,17 +1076,29 @@ async function addContext(context, cid) {
           sbType: contextData.type,
           cid: cid
         }
-        const SbObj = new sbCategoryModel(mapObj);
-        const mapResponse = await SbObj.save(); // save the request object into mongo collection
+        // TODO: if we use mongo then unconnent below 2 lines  
+        // const SbObj = new sbCategoryModel(mapObj);
+        // const mapResponse = await SbObj.save(); // save the request object into mongo collection
+
+        // TODO: we are using reids here to store context
+        const key = `sbCategory:${contextData.type}:${contextData.identifier}`;
+        const setData = await redisClient.setObject(key , mapObj);
+
         // fetching already mapped category id's
-        const mappedCids = await sbCategoryModel.find({sbIdentifier: contextData.identifier, sbType: contextData.type})
-        const listOfCids = mappedCids.map(forum => forum.cid);
+
+        // TODO: if we use mongo then unconnent below 2 lines 
+        // const mappedCids = await sbCategoryModel.find({sbIdentifier: contextData.identifier, sbType: contextData.type})
+        // const listOfCids = mappedCids.map(forum => forum.cid);
+
+        // TODO: we are using reids here to store context
+        const listOfCids = await redisClient.getObject(key);
+
         // Preparing the response object
         const mapResObj = {
           "sbType": contextData.type,
           "sbIdentifier": contextData.identifier,
           "newCid": cid,
-          "cids": listOfCids
+          "cids": [_.get(listOfCids, 'cid')]
         }
         forumIds.push(mapResObj);
         if(i === (context.length - 1)){ 
@@ -1166,8 +1168,13 @@ async function addSubcategories(subCategories, pid) {
                 "sbIdentifier": context.identifier,
                 "cid": creatSubCategory.cid
               }
-              const SbObj = new sbCategoryModel(contextObj);
-              const mapResponse = await SbObj.save();
+              // TODO: if we use mongo then unconnent below 2 lines 
+              // const SbObj = new sbCategoryModel(contextObj);
+              // const mapResponse = await SbObj.save();
+
+              // TODO: we are using reids here to store context
+              const key = `sbCategory:${context.type}:${context.identifier}`;
+              const setData = await redisClient.setObject(key , contextObj);
             })
           }
           
@@ -1322,13 +1329,81 @@ async function getUserDetails(req, res) {
   }
 }
 
+/**
+ * this function will store the forum object in the mapping table in Redis .
+ * @param {*} req 
+ * the request object having sbType, sbIdentifier, cid in the body.
+ * @param {*} res 
+ */
+async function redisCreateForum(req, res) {
+  const payload = { ...req.body.request };
+  const requiredParams = jsonConstants.requiredParams[req.route.path];
+  const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, payload);
+  if( isRequiredParamsMissing ) {
+    const key = `sbCategory:${payload.sbType}:${payload.sbIdentifier}`;
+    payload.cid = Array.isArray(payload.cid) ? JSON.stringify(payload.cid) : payload.cid;
+    const setData = await redisClient.setObject(key , payload);
+    const data = await redisClient.getObject(key);
+    const responseObj = await util.responseData(req, res, data, null);
+    res.send(responseObj);
+  }
+}
+
+/**
+ * This function return the category id's from redis based on the id and type.
+ * @param {*} req 
+ * @param {*} res 
+ */
+async function redisGetForum(req, res) {
+  const payload = { ...req.body.request };
+  const requiredParams = jsonConstants.requiredParams[req.route.path];
+  const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, payload);
+  if( isRequiredParamsMissing ) {
+    const id = Array.isArray(payload.identifier) ? payload.identifier[0] : payload.identifier;
+    const key = `sbCategory:${payload.type}:${id}`;
+    const getData = await redisClient.getObject(key) || {};
+    const responseObj = await util.responseData(req, res, getData, null);
+    res.send(responseObj);
+  }
+}
+
+/**
+ * This function will remove the  the category ids from Redis based on the sb_id and sb_type.
+ * @param {*} req 
+ * @param {*} res 
+ */
+async function redisDeleteForum(req, res) {
+  const input = req.body.request;
+  const payload = { ...req.body.request };
+  const requiredParams = jsonConstants.requiredParams[req.route.path];
+  const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, payload);
+  if( isRequiredParamsMissing ) {
+    const id = Array.isArray(input.sbIdentifier) ? input.sbIdentifier[0] : input.sbIdentifier;
+    const key = `sbCategory:${input.sbType}:${id}`;
+    const deleteForum = await redisClient.client.async.del(key);
+    redisClient.objectCache.del(key);
+    const responseObj = await util.responseData(req, res, jsonConstants.forumStrings.removeForumSuccessMsg, null);
+    res.send(responseObj);
+  }
+}
+
 
 Plugin.load = function (params, callback) {
   var router = params.router
 
   router.post(createSBForum, createSBForumFunc)
-  router.post(getSBForum, getSBForumFunc)
-  router.post(removeSBForum, removeSBForumFunc)
+  // TODO: if we use mongo the to get form data use getSBForumFunc
+  // router.post(getSBForum, getSBForumFunc)
+
+  // TODO: if we use redis then we have to use redisGetForum to get forum data
+  router.post(getSBForum, redisGetForum)
+
+  // TODO: if we use mongo the to remove form data use removeSBForumFunc
+  // router.post(removeSBForum, removeSBForumFunc)
+
+  // TODO: if we use redis then we have to use redisDeleteForum to delete forum data
+  router.post(removeSBForum, redisDeleteForum)
+
   router.post(categoryList, getListOfCategories);
   router.post(tagsList, getTagsRelatedTopics);
   router.post(contextBasesTags, getContextBasedTags)
