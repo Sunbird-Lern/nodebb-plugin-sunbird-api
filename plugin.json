@@ -6,7 +6,12 @@
 	"library": "./index.js",
 	"templates": "templates",
 	"hooks": [
-		{ "hook": "static:app.load", "method": "load" }
+		{ "hook": "static:app.load", "method": "load" },
+		{"hook": "filter:topic.create", "method": "topicCreate" },
+		{"hook": "action:post.updatePostVoteCount", "method": "postVote" },
+		{"hook": "filter:error.handle", "method": "errorLog" },
+		{"hook": "action:sockets.disconnect", "method": "socketDisconnected" },
+		{"hook": "action:sockets.connect", "method": "socketConnected" }
 	],
 	"less": [
 		"./less/style.less"

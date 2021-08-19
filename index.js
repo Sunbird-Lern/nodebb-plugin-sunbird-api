@@ -1387,6 +1387,40 @@ async function redisDeleteForum(req, res) {
   }
 }
 
+Plugin.topicCreate = function(paramas) {
+  console.log('SB:Topic create api');
+  if (paramas) {
+    console.log('SB Topic Param', paramas)
+  }
+}
+
+Plugin.postVote = function(paramas) {
+  console.log('SB: Post vote');
+  if (paramas) {
+    console.log('SB Post vote', paramas)
+  }
+}
+
+Plugin.errorLog = function(paramas) {
+  console.log('SB: Error log');
+  if (paramas) {
+    console.log('SB Error Log', paramas)
+  }
+}
+
+Plugin.socketDisconnected = function(paramas) {
+  console.log('SB: Socket disconected');
+  if (paramas) {
+    console.log('SB Socket disconected ', paramas)
+  }
+}
+
+Plugin.socketConnected = function(paramas) {
+  console.log('SB: socket connected');
+  if (paramas) {
+    console.log('SB socket connected', paramas)
+  }
+}
 
 Plugin.load = function (params, callback) {
   var router = params.router
