@@ -1390,18 +1390,15 @@ async function redisDeleteForum(req, res) {
 Plugin.topicCreate = function(paramas) {
   console.log('SB:Topic create api');
   if (paramas) {
-    console.log('SB Topic Param', paramas)
+    console.log('Create TID: ', _.get(paramas, 'topic.tid'));
   }
 }
 
 Plugin.postVote = function(paramas) {
   console.log('SB: Post vote');
-  if (paramas) {
-    console.log('SB Post vote', paramas)
-  }
 }
 
-Plugin.errorLog = function(paramas) {
+Plugin.errorHandle = function(paramas) {
   console.log('SB: Error log');
   if (paramas) {
     console.log('SB Error Log', paramas)
@@ -1410,18 +1407,19 @@ Plugin.errorLog = function(paramas) {
 
 Plugin.socketDisconnected = function(paramas) {
   console.log('SB: Socket disconected');
-  if (paramas) {
-    console.log('SB Socket disconected ', paramas)
-  }
 }
 
 Plugin.socketConnected = function(paramas) {
   console.log('SB: socket connected');
-  if (paramas) {
-    console.log('SB socket connected', paramas)
-  }
 }
 
+Plugin.analyticsIncrement = function(param) {
+	console.log('SB: Analytics Increment', param);
+}
+
+Plugin.eventsLog = function(param) {
+	console.log('SB: Events log', param);
+}
 Plugin.load = function (params, callback) {
   var router = params.router
 

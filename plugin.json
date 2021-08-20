@@ -8,10 +8,9 @@
 	"hooks": [
 		{ "hook": "static:app.load", "method": "load" },
 		{"hook": "filter:topic.create", "method": "topicCreate" },
-		{"hook": "action:post.updatePostVoteCount", "method": "postVote" },
-		{"hook": "filter:error.handle", "method": "errorLog" },
-		{"hook": "action:sockets.disconnect", "method": "socketDisconnected" },
-		{"hook": "action:sockets.connect", "method": "socketConnected" }
+		{"hook": "filter:error.handle", "method": "errorHandle" },
+		{"hook": "action:events.log", "method": "eventsLog" },
+		{"hook": "action:analytics.increment", "method": "analyticsIncrement" }
 	],
 	"less": [
 		"./less/style.less"
