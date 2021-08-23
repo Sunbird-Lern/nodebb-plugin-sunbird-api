@@ -45,8 +45,9 @@ const Settings = require.main.require('./src/settings');
 const listOfGroupUsers = '/api/forum/v3/groups/users';
 const jsonConstants = require('./lib/constants');
 const util = require('./lib/utils');
-const redisClient = require('./database/redis');
-const sbCategoryModel = require('./database/mongo');
+const configData = require.main.require('./config.json');
+const client = require(`./database/${_.get(configData, 'database')}`);
+
 
 const {
   createCategory,
@@ -800,7 +801,7 @@ async function createSBForumFunc (req, res) {
   const payload = { ...req.body.request };
   const requiredParams = jsonConstants.requiredParams[req.route.path];
   const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, payload);
-  const SbObj = new sbCategoryModel(payload);
+  const SbObj = new client(payload);
   if( isRequiredParamsMissing ) {
   console.log("Creating the forum");
   SbObj.save().then(async (data) => {
@@ -828,7 +829,7 @@ async function getSBForumFunc (req, res) {
     const id = payload.identifier;
     const type = payload.type;
     console.log('Get forumId');
-    sbCategoryModel.find({sbIdentifier: id, sbType: type}).then(async (data) => {
+    client.find({sbIdentifier: id, sbType: type}).then(async (data) => {
     console.log('SB Forum Get Log: db operation success', data);
     const responseObj = await util.responseData(req, res, data, null);
     res.send(responseObj);
@@ -850,7 +851,7 @@ async function removeSBForumFunc (req, res) {
   const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, payload);
   if( isRequiredParamsMissing ) {
   console.log("Removing the category id ");
-  sbCategoryModel.deleteOne(payload).then(async (data) => {
+  client.deleteOne(payload).then(async (data) => {
     if (data.deletedCount > 0) {
       console.log("category deleted");
       const responseObj = await util.responseData(req, res, jsonConstants.forumStrings.removeForumSuccessMsg, null);
@@ -956,7 +957,6 @@ async function getContextBasedTags (req, res) {
           res.send(responseMessage.successResponse(resObj))
         }
       } catch (error) {
-        console.log({ message: `Error while call the api ${options.url}` })
         console.log({ message: `Error message:  ${error.message}` })
         res.statusCode = 404
         resObj.status = constants.failed
@@ -1077,28 +1077,29 @@ async function addContext(context, cid) {
           cid: cid
         }
         // TODO: if we use mongo then unconnent below 2 lines  
-        // const SbObj = new sbCategoryModel(mapObj);
+        // const SbObj = new client(mapObj);
         // const mapResponse = await SbObj.save(); // save the request object into mongo collection
 
         // TODO: we are using reids here to store context
-        const key = `sbCategory:${contextData.type}:${contextData.identifier}`;
-        const setData = await redisClient.setObject(key , mapObj);
-
+        // const key = `sbCategory:${contextData.type}:${contextData.identifier}`;
+        // const setData = await client.setObject(key , mapObj);
+        client.save(mapObj);
         // fetching already mapped category id's
 
         // TODO: if we use mongo then unconnent below 2 lines 
-        // const mappedCids = await sbCategoryModel.find({sbIdentifier: contextData.identifier, sbType: contextData.type})
+        // const mappedCids = await client.find({sbIdentifier: contextData.identifier, sbType: contextData.type})
         // const listOfCids = mappedCids.map(forum => forum.cid);
 
         // TODO: we are using reids here to store context
-        const listOfCids = await redisClient.getObject(key);
-
+        const mappedCids = await client.getContext(contextData);
+        const listOfCids = Array.isArray(mappedCids) ? mappedCids.map(forum => forum.cid) : [_.get(mappedCids, 'cid')];
+        
         // Preparing the response object
         const mapResObj = {
           "sbType": contextData.type,
           "sbIdentifier": contextData.identifier,
           "newCid": cid,
-          "cids": [_.get(listOfCids, 'cid')]
+          "cids": listOfCids
         }
         forumIds.push(mapResObj);
         if(i === (context.length - 1)){ 
@@ -1169,12 +1170,14 @@ async function addSubcategories(subCategories, pid) {
                 "cid": creatSubCategory.cid
               }
               // TODO: if we use mongo then unconnent below 2 lines 
-              // const SbObj = new sbCategoryModel(contextObj);
+              // const SbObj = new client(contextObj);
               // const mapResponse = await SbObj.save();
 
               // TODO: we are using reids here to store context
-              const key = `sbCategory:${context.type}:${context.identifier}`;
-              const setData = await redisClient.setObject(key , contextObj);
+              // const key = `sbCategory:${context.type}:${context.identifier}`;
+              // const setData = await client.setObject(key , contextObj);
+
+              client.save(contextObj);
             })
           }
           
@@ -1335,17 +1338,18 @@ async function getUserDetails(req, res) {
  * the request object having sbType, sbIdentifier, cid in the body.
  * @param {*} res 
  */
-async function redisCreateForum(req, res) {
+async function createForum(req, res) {
   const payload = { ...req.body.request };
   const requiredParams = jsonConstants.requiredParams[req.route.path];
   const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, payload);
   if( isRequiredParamsMissing ) {
-    const key = `sbCategory:${payload.sbType}:${payload.sbIdentifier}`;
-    payload.cid = Array.isArray(payload.cid) ? JSON.stringify(payload.cid) : payload.cid;
-    const setData = await redisClient.setObject(key , payload);
-    const data = await redisClient.getObject(key);
-    const responseObj = await util.responseData(req, res, data, null);
-    res.send(responseObj);
+    try {
+      const data = await client.save(payload);
+      const responseObj = await util.responseData(req, res, data, null);
+      res.send(responseObj);
+    } catch (error) {
+      util.generateError(req, res, error.message, 500);
+    }
   }
 }
 
@@ -1354,16 +1358,18 @@ async function redisCreateForum(req, res) {
  * @param {*} req 
  * @param {*} res 
  */
-async function redisGetForum(req, res) {
+async function getForum(req, res) {
   const payload = { ...req.body.request };
   const requiredParams = jsonConstants.requiredParams[req.route.path];
   const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, payload);
   if( isRequiredParamsMissing ) {
-    const id = Array.isArray(payload.identifier) ? payload.identifier[0] : payload.identifier;
-    const key = `sbCategory:${payload.type}:${id}`;
-    const getData = await redisClient.getObject(key) || {};
-    const responseObj = await util.responseData(req, res, getData, null);
-    res.send(responseObj);
+    try {
+      const getData = await client.getContext(payload) || {};
+      const responseObj = await util.responseData(req, res, getData, null);
+      res.send(responseObj);
+    } catch(error) {
+      util.generateError(req, res, error.message, 500);
+    }
   }
 }
 
@@ -1372,69 +1378,40 @@ async function redisGetForum(req, res) {
  * @param {*} req 
  * @param {*} res 
  */
-async function redisDeleteForum(req, res) {
-  const input = req.body.request;
+async function removeForum(req, res) {
   const payload = { ...req.body.request };
   const requiredParams = jsonConstants.requiredParams[req.route.path];
   const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, payload);
   if( isRequiredParamsMissing ) {
-    const id = Array.isArray(input.sbIdentifier) ? input.sbIdentifier[0] : input.sbIdentifier;
-    const key = `sbCategory:${input.sbType}:${id}`;
-    const deleteForum = await redisClient.client.async.del(key);
-    redisClient.objectCache.del(key);
-    const responseObj = await util.responseData(req, res, jsonConstants.forumStrings.removeForumSuccessMsg, null);
-    res.send(responseObj);
+    try {
+      const data = await client.removeContext(payload);
+      if (data === 1) {
+        const responseObj = await util.responseData(req, res, jsonConstants.forumStrings.removeForumSuccessMsg, null);
+        res.send(responseObj);
+      } else {
+        util.generateError(req, res, jsonConstants.forumStrings.removeForumFailMsg, 400);
+      }
+    } catch(error) {
+      util.generateError(req, res, error.message, 500);
+    }
   }
 }
 
-Plugin.topicCreate = function(paramas) {
-  console.log('SB:Topic create api');
-  if (paramas) {
-    console.log('Create TID: ', _.get(paramas, 'topic.tid'));
-  }
-}
-
-Plugin.postVote = function(paramas) {
-  console.log('SB: Post vote');
-}
-
-Plugin.errorHandle = function(paramas) {
-  console.log('SB: Error log');
-  if (paramas) {
-    console.log('SB Error Log', paramas)
-  }
-}
-
-Plugin.socketDisconnected = function(paramas) {
-  console.log('SB: Socket disconected');
-}
-
-Plugin.socketConnected = function(paramas) {
-  console.log('SB: socket connected');
-}
-
-Plugin.analyticsIncrement = function(param) {
-	console.log('SB: Analytics Increment', param);
-}
-
-Plugin.eventsLog = function(param) {
-	console.log('SB: Events log', param);
-}
 Plugin.load = function (params, callback) {
   var router = params.router
 
-  router.post(createSBForum, createSBForumFunc)
+  router.post(createSBForum, createForum)
   // TODO: if we use mongo the to get form data use getSBForumFunc
   // router.post(getSBForum, getSBForumFunc)
 
   // TODO: if we use redis then we have to use redisGetForum to get forum data
-  router.post(getSBForum, redisGetForum)
+  router.post(getSBForum, getForum)
 
   // TODO: if we use mongo the to remove form data use removeSBForumFunc
   // router.post(removeSBForum, removeSBForumFunc)
 
   // TODO: if we use redis then we have to use redisDeleteForum to delete forum data
-  router.post(removeSBForum, redisDeleteForum)
+  router.post(removeSBForum, removeForum)
 
   router.post(categoryList, getListOfCategories);
   router.post(tagsList, getTagsRelatedTopics);

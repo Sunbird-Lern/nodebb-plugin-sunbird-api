@@ -6,11 +6,7 @@
 	"library": "./index.js",
 	"templates": "templates",
 	"hooks": [
-		{ "hook": "static:app.load", "method": "load" },
-		{"hook": "filter:topic.create", "method": "topicCreate" },
-		{"hook": "filter:error.handle", "method": "errorHandle" },
-		{"hook": "action:events.log", "method": "eventsLog" },
-		{"hook": "action:analytics.increment", "method": "analyticsIncrement" }
+		{ "hook": "static:app.load", "method": "load" }
 	],
 	"less": [
 		"./less/style.less"
