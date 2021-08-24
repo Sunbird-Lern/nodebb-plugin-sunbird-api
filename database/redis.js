@@ -27,7 +27,7 @@ const redis = {
             const id = Array.isArray(context.identifier) ? context.identifier[0] : context.identifier;
             const key = `sbCategory:${context.type}:${id}`;
             const data = await redisClient.getObject(key);
-            return data;
+            return Array.of(data);
         } catch(error) {
             throw error;
         }
