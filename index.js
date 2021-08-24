@@ -1338,7 +1338,7 @@ async function getUserDetails(req, res) {
  * the request object having sbType, sbIdentifier, cid in the body.
  * @param {*} res 
  */
-async function createForum(req, res) {
+async function createForumContext(req, res) {
   const payload = { ...req.body.request };
   const requiredParams = jsonConstants.requiredParams[req.route.path];
   const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, payload);
@@ -1358,7 +1358,7 @@ async function createForum(req, res) {
  * @param {*} req 
  * @param {*} res 
  */
-async function getForum(req, res) {
+async function getForumContext(req, res) {
   const payload = { ...req.body.request };
   const requiredParams = jsonConstants.requiredParams[req.route.path];
   const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, payload);
@@ -1378,7 +1378,7 @@ async function getForum(req, res) {
  * @param {*} req 
  * @param {*} res 
  */
-async function removeForum(req, res) {
+async function removeForumContext(req, res) {
   const payload = { ...req.body.request };
   const requiredParams = jsonConstants.requiredParams[req.route.path];
   const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, payload);
@@ -1400,18 +1400,18 @@ async function removeForum(req, res) {
 Plugin.load = function (params, callback) {
   var router = params.router
 
-  router.post(createSBForum, createForum)
+  router.post(createSBForum, createForumContext)
   // TODO: if we use mongo the to get form data use getSBForumFunc
   // router.post(getSBForum, getSBForumFunc)
 
   // TODO: if we use redis then we have to use redisGetForum to get forum data
-  router.post(getSBForum, getForum)
+  router.post(getSBForum, getForumContext)
 
   // TODO: if we use mongo the to remove form data use removeSBForumFunc
   // router.post(removeSBForum, removeSBForumFunc)
 
   // TODO: if we use redis then we have to use redisDeleteForum to delete forum data
-  router.post(removeSBForum, removeForum)
+  router.post(removeSBForum, removeForumContext)
 
   router.post(categoryList, getListOfCategories);
   router.post(tagsList, getTagsRelatedTopics);
