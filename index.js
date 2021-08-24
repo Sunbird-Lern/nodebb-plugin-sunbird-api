@@ -1092,7 +1092,7 @@ async function addContext(context, cid) {
 
         // TODO: we are using reids here to store context
         const mappedCids = await client.getContext(contextData);
-        const listOfCids = Array.isArray(mappedCids) ? mappedCids.map(forum => forum.cid) : [_.get(mappedCids, 'cid')];
+        const listOfCids = mappedCids.length > 0 ? mappedCids.map(forum => forum.cid) : [];
         
         // Preparing the response object
         const mapResObj = {
@@ -1364,7 +1364,7 @@ async function getForumContext(req, res) {
   const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, payload);
   if( isRequiredParamsMissing ) {
     try {
-      const getData = await client.getContext(payload) || {};
+      const getData = await client.getContext(payload);
       const responseObj = await util.responseData(req, res, getData, null);
       res.send(responseObj);
     } catch(error) {
