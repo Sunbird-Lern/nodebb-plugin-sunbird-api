@@ -834,7 +834,7 @@ async function getTagsRelatedTopics(req,res) {
     try {
       const url = constants.tags+ '/' + payload.tag;
       const data = await util.getResponseData(req, url, tagsList, null, constants.get);
-      const releatedTopics = data.topics.filter(topic => payload.cid.includes(topic.cid));
+      const releatedTopics = data.topics.filter(topic => payload.cid.includes(String(topic.cid)));
       const responseObj = await util.responseData(req, res, releatedTopics, null);
       res.send(responseObj);
     } catch(error) {
