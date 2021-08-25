@@ -1,7 +1,7 @@
 const configData = require.main.require('./config.json');
 const redisConnection = require.main.require('./src/database/redis/connection');
 const _ = require('lodash');
-configData.redis.database = '1';
+configData.redis.database = _.get(configData, 'redis.secondarydb');
 const connection = redisConnection.connect(configData.redis);
 const redisClient = {'client' : connection};
 
