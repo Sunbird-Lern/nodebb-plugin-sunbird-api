@@ -46,7 +46,7 @@ const listOfGroupUsers = '/api/forum/v3/groups/users';
 const jsonConstants = require('./lib/constants');
 const util = require('./lib/utils');
 const configData = require.main.require('./config.json');
-const client = require(`./database/${_.get(configData, 'database')}`);
+let client;
 
 
 const {
@@ -790,82 +790,7 @@ function commonObject (res, id, msgId, status, resCode, err, errmsg, data) {
   return resObj
 }
 
-/**
- * this function will store the forum object in the mapping table.
- * @param {*} req 
- * the request object having sbType, sbIdentifier, cid in the body.
- * @param {*} res 
- */
-async function createSBForumFunc (req, res) {
-  console.log("SB Forum Create Log: request payload=", req.body);
-  const payload = { ...req.body.request };
-  const requiredParams = jsonConstants.requiredParams[req.route.path];
-  const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, payload);
-  const SbObj = new client(payload);
-  if( isRequiredParamsMissing ) {
-  console.log("Creating the forum");
-  SbObj.save().then(async (data) => {
-    console.log("forum created");
-    const responseObj = await util.responseData(req, res, data, null);
-    res.send(responseObj);
-  }).catch(error => {
-    console.log("Error while Creating the forum");
-    util.generateError(req, res, error.message, 500);
-  });
-  }
-}
 
-/**
- * This function return the category id's from mongoDB based on the id and type.
- * @param {*} req 
- * @param {*} res 
- */
-async function getSBForumFunc (req, res) {
-  console.log("SB Forum Get Log: request payload", req.body);
-  const payload =  { ...req.body.request };
-  const requiredParams = jsonConstants.requiredParams[req.route.path];
-  const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, payload);
-  if( isRequiredParamsMissing ) {
-    const id = payload.identifier;
-    const type = payload.type;
-    console.log('Get forumId');
-    client.find({sbIdentifier: id, sbType: type}).then(async (data) => {
-    console.log('SB Forum Get Log: db operation success', data);
-    const responseObj = await util.responseData(req, res, data, null);
-    res.send(responseObj);
-  }).catch(error => {
-    console.log('Error while getting the forumId');
-    util.generateError(req, res, error.message, 500);
-  });
-  }
-}
-
-/**
- * This function will remove the  the category ids from mongoDB based on the sb_id and sb_type.
- * @param {*} req 
- * @param {*} res 
- */
-async function removeSBForumFunc (req, res) {
-  const payload = { ...req.body.request };
-  const requiredParams = jsonConstants.requiredParams[req.route.path];
-  const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, payload);
-  if( isRequiredParamsMissing ) {
-  console.log("Removing the category id ");
-  client.deleteOne(payload).then(async (data) => {
-    if (data.deletedCount > 0) {
-      console.log("category deleted");
-      const responseObj = await util.responseData(req, res, jsonConstants.forumStrings.removeForumSuccessMsg, null);
-      res.send(responseObj);
-    } else {
-      console.log("failed to delete category");
-      util.generateError(req, res, jsonConstants.forumStrings.removeForumFailMsg, 400);
-    }
-  }).catch(error => {
-    console.log("Error while removing the category");
-    util.generateError(req, res, error.message, 500);
-  });
-  }
-}
 /**
  * @param {*} req 
  * @param {*} res
@@ -1076,21 +1001,7 @@ async function addContext(context, cid) {
           sbType: contextData.type,
           cid: cid
         }
-        // TODO: if we use mongo then unconnent below 2 lines  
-        // const SbObj = new client(mapObj);
-        // const mapResponse = await SbObj.save(); // save the request object into mongo collection
-
-        // TODO: we are using reids here to store context
-        // const key = `sbCategory:${contextData.type}:${contextData.identifier}`;
-        // const setData = await client.setObject(key , mapObj);
         client.save(mapObj);
-        // fetching already mapped category id's
-
-        // TODO: if we use mongo then unconnent below 2 lines 
-        // const mappedCids = await client.find({sbIdentifier: contextData.identifier, sbType: contextData.type})
-        // const listOfCids = mappedCids.map(forum => forum.cid);
-
-        // TODO: we are using reids here to store context
         const mappedCids = await client.getContext(contextData);
         const listOfCids = mappedCids.length > 0 ? mappedCids.map(forum => forum.cid) : [];
         
@@ -1169,14 +1080,6 @@ async function addSubcategories(subCategories, pid) {
                 "sbIdentifier": context.identifier,
                 "cid": creatSubCategory.cid
               }
-              // TODO: if we use mongo then unconnent below 2 lines 
-              // const SbObj = new client(contextObj);
-              // const mapResponse = await SbObj.save();
-
-              // TODO: we are using reids here to store context
-              // const key = `sbCategory:${context.type}:${context.identifier}`;
-              // const setData = await client.setObject(key , contextObj);
-
               client.save(contextObj);
             })
           }
@@ -1399,20 +1302,11 @@ async function removeForumContext(req, res) {
 
 Plugin.load = function (params, callback) {
   var router = params.router
+  client = require(`./database/${_.get(configData, 'database')}`);
 
   router.post(createSBForum, createForumContext)
-  // TODO: if we use mongo the to get form data use getSBForumFunc
-  // router.post(getSBForum, getSBForumFunc)
-
-  // TODO: if we use redis then we have to use redisGetForum to get forum data
   router.post(getSBForum, getForumContext)
-
-  // TODO: if we use mongo the to remove form data use removeSBForumFunc
-  // router.post(removeSBForum, removeSBForumFunc)
-
-  // TODO: if we use redis then we have to use redisDeleteForum to delete forum data
   router.post(removeSBForum, removeForumContext)
-
   router.post(categoryList, getListOfCategories);
   router.post(tagsList, getTagsRelatedTopics);
   router.post(contextBasesTags, getContextBasedTags)
