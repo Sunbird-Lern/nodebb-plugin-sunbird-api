@@ -4,8 +4,8 @@ let redisClient;
 
 const redis = {
     connect: (connectionObj) => {
-        console.log('Redis db connection', connectionObj);
-        connectionObj.redis.database = _.get(connectionObj, 'redis.secondarydb');
+        console.log('Redis db connection', JSON.stringify(connectionObj));
+        connectionObj.redis.database = _.get(connectionObj, 'redis.secondarydb') || 11;
         const connection = redisConnection.connect(connectionObj.redis);
         redisClient = {'client' : connection};
         require.main.require('./src/database/redis/hash')(redisClient);
