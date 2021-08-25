@@ -1303,7 +1303,7 @@ async function removeForumContext(req, res) {
 Plugin.load = function (params, callback) {
   var router = params.router
   client = require(`./database/${_.get(configData, 'database')}`);
-
+  client.connect(configData);
   router.post(createSBForum, createForumContext)
   router.post(getSBForum, getForumContext)
   router.post(removeSBForum, removeForumContext)

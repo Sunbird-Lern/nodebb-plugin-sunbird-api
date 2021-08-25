@@ -1,16 +1,18 @@
-const configData = require.main.require('./config.json');
 const redisConnection = require.main.require('./src/database/redis/connection');
 const _ = require('lodash');
-configData.redis.database = _.get(configData, 'redis.secondarydb');
-const connection = redisConnection.connect(configData.redis);
-const redisClient = {'client' : connection};
-
-
-require.main.require('./src/database/redis/hash')(redisClient);
-require.main.require('./src/database/redis/main')(redisClient);
-require.main.require('./src/database/redis/promisify')(redisClient.client);
+let redisClient;
 
 const redis = {
+    connect: (connectionObj) => {
+        console.log('Redis db connection', connectionObj);
+        connectionObj.redis.database = _.get(connectionObj, 'redis.secondarydb');
+        const connection = redisConnection.connect(connectionObj.redis);
+        redisClient = {'client' : connection};
+        require.main.require('./src/database/redis/hash')(redisClient);
+        require.main.require('./src/database/redis/main')(redisClient);
+        require.main.require('./src/database/redis/promisify')(redisClient.client);
+        console.log('Redis db connected.')
+    },
     save: async (context) => {
         try {
             const key = `sbCategory:${context.sbType}:${context.sbIdentifier}`;
