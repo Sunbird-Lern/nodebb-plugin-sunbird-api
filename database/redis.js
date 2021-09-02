@@ -28,12 +28,14 @@ const redis = {
         try {
             const id = Array.isArray(context.identifier) ? context.identifier[0] : context.identifier;
             const key = `sbCategory:${context.type}:${id}`;
-            const data = await redisClient.getObject(key);
+            const nodebbData = await redisClient.getObject(key);
+            const data =  await redisClient.client.async.hgetall(key);// await redisClient.getObject(key);
+            console.log("context_key: ", key, " Nodebb returns: ", nodebbData ? JSON.stringify(nodebbData) : nodebbData);
+            console.log("context_key: ", key, " Redis returns: ", data ? JSON.stringify(data) : data);
             return data ? Array.of(data) : [];
         } catch(error) {
             throw error;
         }
-
     },
     removeContext: async (context) => {
         try {
