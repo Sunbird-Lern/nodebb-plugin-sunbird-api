@@ -32,7 +32,7 @@ const redis = {
             const data =  await redisClient.client.async.hgetall(key);// await redisClient.getObject(key);
             console.log("context_key: ", key, " Nodebb returns: ", nodebbData ? JSON.stringify(nodebbData) : nodebbData);
             console.log("context_key: ", key, " Redis returns: ", data ? JSON.stringify(data) : data);
-            return data ? Array.of(data) : [];
+            return nodebbData ? Array.of(nodebbData) : [];
         } catch(error) {
             throw error;
         }
@@ -43,6 +43,7 @@ const redis = {
             const key = `sbCategory:${context.sbType}:${id}`;
             const deleteForum = await redisClient.client.async.del(key);
             redisClient.objectCache.del(key);
+            console.log("context_remove_key: ", key);
             return deleteForum;
         } catch(error) {
             throw error;
