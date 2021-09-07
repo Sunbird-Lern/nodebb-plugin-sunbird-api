@@ -40,6 +40,7 @@ const copyPrivilages = '/api/privileges/v2/copy'
 const getUids = '/api/forum/v2/uids';
 const addUserIntoGroup = '/api/forum/v3/group/membership';
 const groupsPriveleges = '/api/forum/v3/category/:cid/privileges';
+const updateUserProfile = '/api/forum/v3/user/profile';
 const oidcPlugin = require.main.require('./node_modules/nodebb-plugin-sunbird-oidc/library.js');
 const Settings = require.main.require('./src/settings');
 const listOfGroupUsers = '/api/forum/v3/groups/users';
@@ -1300,6 +1301,35 @@ async function removeForumContext(req, res) {
   }
 }
 
+/**
+ * This function will update the user data.
+ * req body includes 
+ * username, fullname, uid
+ * @param {*} req 
+ * @param {*} res 
+ */
+async function updateUserProfileData(req,res) {
+  const userData = { ...req.body.request };
+  const requiredParams = jsonConstants.requiredParams[req.route.path];
+  const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, userData);
+  if( isRequiredParamsMissing ) {
+    try {
+          const isUserExist = await Users.exists(_.get(userData, 'uid'));
+          if (isUserExist) {
+              const userFields = jsonConstants.forumStrings.userFields;
+              const oldUserData = await Users.getUserFields(_.get(userData, 'uid'), userFields);
+              const result = await util.updateNodebbUserData(userData, oldUserData, userFields);
+              const responseObj = await util.responseData(req, res, jsonConstants.forumStrings.userDataSave, null);
+              res.send(responseObj);
+          } else {
+              util.generateError(req, res, jsonConstants.forumStrings.userDataError, 400);
+          }
+    } catch (error) {
+          util.generateError(req, res, error.message, 500);
+    }
+  }
+}
+
 Plugin.load = function (params, callback) {
   var router = params.router
   client = require(`./database/${_.get(configData, 'database')}`);
@@ -1316,6 +1346,7 @@ Plugin.load = function (params, callback) {
   router.post(addUserIntoGroup, addUsers);
   router.post(listOfGroupUsers, getContextUserGroups);
   router.post(groupsPriveleges, getContextGroupPriveleges);
+  router.post(updateUserProfile, updateUserProfileData);
 
   router.get('/api/forum/test/user/:userslug', getUserDetails);
 
