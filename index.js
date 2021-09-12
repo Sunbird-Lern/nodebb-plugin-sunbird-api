@@ -48,7 +48,7 @@ const jsonConstants = require('./lib/constants');
 const util = require('./lib/utils');
 const configData = require.main.require('./config.json');
 let client;
-
+const writeApi = require.main.require('./node_modules/nodebb-plugin-write-api/routes/v2/middleware.js');
 
 const {
   createCategory,
@@ -798,6 +798,7 @@ function commonObject (res, id, msgId, status, resCode, err, errmsg, data) {
  * This method will take list of cids and return list of category details for a respective cid.
  */
 async function getListOfCategories(req, res) {
+  userCheck(req,res)
   const payload = { ...req.body.request };
   const requiredParams = jsonConstants.requiredParams[req.route.path];
   const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, payload);
@@ -828,6 +829,7 @@ async function getListOfCategories(req, res) {
  * This method will tag name and cid and return list of topics that contains that tag name under particuler cid.
  */
 async function getTagsRelatedTopics(req,res) {
+  userCheck(req,res)
   const payload = { ...req.body.request };
   const requiredParams = jsonConstants.requiredParams[req.route.path];
   const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, payload);
@@ -849,6 +851,7 @@ async function getTagsRelatedTopics(req,res) {
 
 
 async function getContextBasedTags (req, res) {
+  userCheck(req,res)
   const payload = { ...req.body.request }
   let resObj = {
     id: constants[contextBasesTags],
@@ -901,6 +904,7 @@ async function getContextBasedTags (req, res) {
  * This method will take sunbird identifiers and return nodebb uid respectively.
  */
 async function getUserIds(req,res) {
+  userCheck(req,res)
   const payload = { ...req.body.request };
   const requiredParams = jsonConstants.requiredParams[req.route.path];
   const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, payload);
@@ -923,6 +927,7 @@ async function getUserIds(req,res) {
  * this the generalization of api for course and groups
  */
 async function relatedDiscussions (req, res) {
+    userCheck(req,res);
     const reqPayload = { ...req.body };
     const requiredParams = jsonConstants.requiredParams[req.route.path];
     const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, reqPayload);
@@ -1110,6 +1115,7 @@ async function addSubcategories(subCategories, pid) {
  * This will take pid and cid and do opy of privileges from pid and add those privileges to cid.
  */
 async function copyPrivilegeData(req, res) {
+  userCheck(req,res)
   const payload = { ...req.body.request };
   const requiredParams = jsonConstants.requiredParams[req.route.path];
   const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, payload);
@@ -1127,6 +1133,7 @@ async function copyPrivilegeData(req, res) {
  * This will take groups and members array and add the members into groups.
  */
 async function addUsers(req, res) {
+  userCheck(req,res)
   const payload = { ...req.body.request };
   const requiredParams = jsonConstants.requiredParams[req.route.path];;
   const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, payload);
@@ -1162,6 +1169,7 @@ async function addUsers(req, res) {
  * groups array is optional if you pass groups array it will return list of users added in those groups.
  */
 async function getContextUserGroups(req, res) {
+  userCheck(req,res)
   const payload = { ...req.body.request };
   const requiredParams = jsonConstants.requiredParams[req.route.path];;
   const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, payload);
@@ -1182,6 +1190,7 @@ async function getContextUserGroups(req, res) {
  * This api will take cid and groups names and return list of users added in those groups for a category.
  */
 async function getContextGroupPriveleges(req, res) {
+  userCheck(req,res)
   const payload = {...req.body.request};
   const requiredParams = jsonConstants.requiredParams[req.route.path];
   const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, payload);
@@ -1243,6 +1252,7 @@ async function getUserDetails(req, res) {
  * @param {*} res 
  */
 async function createForumContext(req, res) {
+  userCheck(req,res)
   const payload = { ...req.body.request };
   const requiredParams = jsonConstants.requiredParams[req.route.path];
   const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, payload);
@@ -1263,6 +1273,7 @@ async function createForumContext(req, res) {
  * @param {*} res 
  */
 async function getForumContext(req, res) {
+  userCheck(req,res)
   const payload = { ...req.body.request };
   const requiredParams = jsonConstants.requiredParams[req.route.path];
   const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, payload);
@@ -1283,6 +1294,7 @@ async function getForumContext(req, res) {
  * @param {*} res 
  */
 async function removeForumContext(req, res) {
+  userCheck(req,res)
   const payload = { ...req.body.request };
   const requiredParams = jsonConstants.requiredParams[req.route.path];
   const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, payload);
@@ -1309,15 +1321,22 @@ async function removeForumContext(req, res) {
  * @param {*} res 
  */
 async function updateUserProfileData(req,res) {
+  userCheck(req,res);
   const userData = { ...req.body.request };
   const requiredParams = jsonConstants.requiredParams[req.route.path];
   const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, userData);
   if( isRequiredParamsMissing ) {
     try {
-          const isUserExist = await Users.exists(_.get(userData, 'uid'));
+          const userIds = await util.userDetailsByoAuth([userData.sbIdentifier]);
+          const uid = _.get(userIds[0], 'nodebbUid');
+          if (!uid || parseInt(uid, 10) !== parseInt(req.user.uid, 10)) {
+            return util.generateError(req, res, 'You do not have enough privileges for this action.', 401);
+          }
+          const isUserExist = await Users.exists(uid);
           if (isUserExist) {
               const userFields = jsonConstants.forumStrings.userFields;
-              const oldUserData = await Users.getUserFields(_.get(userData, 'uid'), userFields);
+              const oldUserData = await Users.getUserFields(uid, userFields);
+              userData['uid'] = uid;
               const result = await util.updateNodebbUserData(userData, oldUserData, userFields);
               const responseObj = await util.responseData(req, res, jsonConstants.forumStrings.userDataSave, null);
               res.send(responseObj);
@@ -1330,23 +1349,31 @@ async function updateUserProfileData(req,res) {
   }
 }
 
+
+function userCheck(req,res) {
+  if (!req.user) {
+    return util.generateError(req, res, 'You do not have enough privileges for this action.', 401);;
+  }
+}
+
+
 Plugin.load = function (params, callback) {
   var router = params.router
   client = require(`./database/${_.get(configData, 'database')}`);
   client.connect(configData);
-  router.post(createSBForum, createForumContext)
-  router.post(getSBForum, getForumContext)
-  router.post(removeSBForum, removeForumContext)
-  router.post(categoryList, getListOfCategories);
-  router.post(tagsList, getTagsRelatedTopics);
-  router.post(contextBasesTags, getContextBasedTags)
-  router.post(createRelatedDiscussions, relatedDiscussions);
-  router.post(copyPrivilages, copyPrivilegeData);
-  router.post(getUids, getUserIds);
-  router.post(addUserIntoGroup, addUsers);
-  router.post(listOfGroupUsers, getContextUserGroups);
-  router.post(groupsPriveleges, getContextGroupPriveleges);
-  router.post(updateUserProfile, updateUserProfileData);
+  router.post(createSBForum, writeApi.requireUser, createForumContext)
+  router.post(getSBForum, writeApi.requireUser, getForumContext)
+  router.post(removeSBForum, writeApi.requireUser, removeForumContext)
+  router.post(categoryList, writeApi.requireUser, getListOfCategories);
+  router.post(tagsList, writeApi.requireUser, getTagsRelatedTopics);
+  router.post(contextBasesTags, writeApi.requireUser, getContextBasedTags)
+  router.post(createRelatedDiscussions, writeApi.requireUser, relatedDiscussions);
+  router.post(copyPrivilages, writeApi.requireUser, copyPrivilegeData);
+  router.post(getUids, writeApi.requireUser, getUserIds);
+  router.post(addUserIntoGroup, writeApi.requireUser, addUsers);
+  router.post(listOfGroupUsers, writeApi.requireUser, getContextUserGroups);
+  router.post(groupsPriveleges, writeApi.requireUser, getContextGroupPriveleges);
+  router.post(updateUserProfile, writeApi.requireUser, updateUserProfileData);
 
   router.get('/api/forum/test/user/:userslug', getUserDetails);
 
