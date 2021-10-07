@@ -1299,6 +1299,15 @@ async function removeForumContext(req, res) {
     }
   }
 }
+/**
+ * This is to verify health of nodebb pod.
+ * @param {*} req 
+ * @param {*} res 
+ */
+function healthCheck (req, res) {
+  console.log('SB LOG: Nodebb pod health check.');
+  res.send(200);
+}
 
 Plugin.load = function (params, callback) {
   var router = params.router
@@ -1318,6 +1327,8 @@ Plugin.load = function (params, callback) {
   router.post(groupsPriveleges, getContextGroupPriveleges);
 
   router.get('/api/forum/test/user/:userslug', getUserDetails);
+
+  router.get('/api/forum/health', healthCheck);
 
   router.post(
     createForumURL,
