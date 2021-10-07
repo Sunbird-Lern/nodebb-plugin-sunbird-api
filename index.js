@@ -922,11 +922,11 @@ async function getUserIds(req,res) {
  * this the generalization of api for course and groups
  */
 async function relatedDiscussions (req, res) {
-    const reqPayload = { ...req.body };
+    const reqPayload = { ...req.body.category };
     const requiredParams = jsonConstants.requiredParams[req.route.path];
     const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, reqPayload);
     if (isRequiredParamsMissing) {
-          const payload = reqPayload.category;
+          const payload = reqPayload;
           // check: is both privileges and groups present
          if (!_.isEmpty(payload.groups) && !_.isEmpty(payload.privileges)) {
            util.generateError(req, res, jsonConstants.forumStrings.privilegeGroupErrorMsg, 400, jsonConstants.forumStrings.payloadError);
