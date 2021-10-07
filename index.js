@@ -1300,7 +1300,7 @@ async function removeForumContext(req, res) {
   }
 }
 /**
- * This is to verify health of nodebb pod.
+ * This api is to verify health of nodebb pod.
  * @param {*} req 
  * @param {*} res 
  */
