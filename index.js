@@ -923,11 +923,11 @@ async function getUserIds(req,res) {
  * this the generalization of api for course and groups
  */
 async function relatedDiscussions (req, res) {
-    const reqPayload = { ...req.body };
+    const reqPayload = { ...req.body.category };
     const requiredParams = jsonConstants.requiredParams[req.route.path];
     const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, reqPayload);
     if (isRequiredParamsMissing) {
-          const payload = reqPayload.category;
+          const payload = reqPayload;
           // check: is both privileges and groups present
          if (!_.isEmpty(payload.groups) && !_.isEmpty(payload.privileges)) {
            util.generateError(req, res, jsonConstants.forumStrings.privilegeGroupErrorMsg, 400, jsonConstants.forumStrings.payloadError);
@@ -1300,6 +1300,15 @@ async function removeForumContext(req, res) {
     }
   }
 }
+/**
+ * This api is to verify health of nodebb pod.
+ * @param {*} req 
+ * @param {*} res 
+ */
+function healthCheck (req, res) {
+  console.log('SB LOG: Nodebb pod health check.');
+  res.send(200);
+}
 
 /**
  * This function will update the user data.
@@ -1352,6 +1361,8 @@ Plugin.load = function (params, callback) {
   router.post(updateUserProfile, updateUserProfileData);
 
   router.get('/api/forum/test/user/:userslug', getUserDetails);
+
+  router.get('/api/forum/health', healthCheck);
 
   router.post(
     createForumURL,
