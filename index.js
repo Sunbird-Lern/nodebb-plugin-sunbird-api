@@ -1320,8 +1320,8 @@ function healthCheck (req, res) {
  async function updateUserProfileData(req,res) {
   const userData = { ...req.body.request };
   const requiredParams = jsonConstants.requiredParams[req.route.path];
-  const isRequiredParamsMissing = await util.checkRequiredParameters(req, res, requiredParams, userData);
-  if( isRequiredParamsMissing ) {
+  const isPayloadCorrect = await util.checkRequiredParameters(req, res, requiredParams, userData);
+  if( isPayloadCorrect ) {
     try {
           const userIds = await util.userDetailsByoAuth([userData.sbIdentifier]);
           const uid = _.get(userIds[0], 'nodebbUid');
