@@ -3,14 +3,13 @@ const _ = require('lodash');
 let redisClient;
 
 const redis = {
-    connect: (connectionObj) => {
+    connect: async (connectionObj) => {
         console.log('Redis db connection', JSON.stringify(connectionObj));
         connectionObj.redis.database = parseInt(_.get(connectionObj, 'redis.database')) + 1;
-        const connection = redisConnection.connect(connectionObj.redis);
+        const connection = await redisConnection.connect(connectionObj.redis);
         redisClient = {'client' : connection};
         require.main.require('./src/database/redis/hash')(redisClient);
         require.main.require('./src/database/redis/main')(redisClient);
-        require.main.require('./src/database/redis/promisify')(redisClient.client);
         console.log('Redis db connected.')
     },
     save: async (context) => {
@@ -29,9 +28,7 @@ const redis = {
             const id = Array.isArray(context.identifier) ? context.identifier[0] : context.identifier;
             const key = `sbCategory:${context.type}:${id}`;
             const nodebbData = await redisClient.getObject(key);
-            const data =  await redisClient.client.async.hgetall(key);// await redisClient.getObject(key);
             console.log("context_key: ", key, " Nodebb returns: ", nodebbData ? JSON.stringify(nodebbData) : nodebbData);
-            console.log("context_key: ", key, " Redis returns: ", data ? JSON.stringify(data) : data);
             return nodebbData ? Array.of(nodebbData) : [];
         } catch(error) {
             throw error;
@@ -41,10 +38,10 @@ const redis = {
         try {
             const id = Array.isArray(context.sbIdentifier) ? context.sbIdentifier[0] : context.sbIdentifier;
             const key = `sbCategory:${context.sbType}:${id}`;
-            const deleteForum = await redisClient.client.async.del(key);
+            const deleteForum = await redisClient.delete(key);
             redisClient.objectCache.del(key);
             console.log("context_remove_key: ", key);
-            return deleteForum;
+            return 1;
         } catch(error) {
             throw error;
         }
