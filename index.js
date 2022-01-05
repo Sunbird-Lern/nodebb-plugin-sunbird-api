@@ -1348,14 +1348,15 @@ async function getSBUserIds (req, res) {
   const isPayloadCorrect = await util.checkRequiredParameters(req, res, requiredParams, data);
   if (isPayloadCorrect) {
     let sbuids = [];
-    data.uids.forEach(async (uid, index) => {
-      const userObj = await Users.getUserFields(uid, ['sunbird-oidcId', 'username']);
+    const uids = data.uids;
+    for(let i=0; i< uids.length; i++) {
+      const userObj = await Users.getUserFields(uids[i], ['sunbird-oidcId', 'username']);
       sbuids.push(userObj);
-      if(index === (data.uids.length - 1)) {
+      if(i === (uids.length - 1)) {
         const responseObj = await util.responseData(req, res, sbuids, null);
         res.send(responseObj);
       }
-    });
+    }
   }
 }
 
