@@ -38,6 +38,7 @@ const privileges = require.main.require('./src/privileges');
 const _ = require('lodash');
 const copyPrivilages = '/api/privileges/v2/copy'
 const getUids = '/api/forum/v2/uids';
+const sbUserIds = '/api/forum/v2/sunbird/uids';
 const addUserIntoGroup = '/api/forum/v3/group/membership';
 const groupsPriveleges = '/api/forum/v3/category/:cid/privileges';
 const oidcPlugin = require.main.require('./node_modules/nodebb-plugin-sunbird-oidc/library.js');
@@ -1341,6 +1342,23 @@ function healthCheck (req, res) {
     }
   }
 }
+async function getSBUserIds (req, res) {
+  const data = { ...req.body.request };
+  const requiredParams = jsonConstants.requiredParams[req.route.path];
+  const isPayloadCorrect = await util.checkRequiredParameters(req, res, requiredParams, data);
+  if (isPayloadCorrect) {
+    let sbuids = [];
+    const uids = data.uids;
+    for(let i=0; i< uids.length; i++) {
+      const userObj = await Users.getUserFields(uids[i], ['sunbird-oidcId', 'username']);
+      sbuids.push(userObj);
+      if(i === (uids.length - 1)) {
+        const responseObj = await util.responseData(req, res, sbuids, null);
+        res.send(responseObj);
+      }
+    }
+  }
+}
 
 Plugin.load = function (params, callback) {
   var router = params.router
@@ -1359,7 +1377,7 @@ Plugin.load = function (params, callback) {
   router.post(listOfGroupUsers, getContextUserGroups);
   router.post(groupsPriveleges, getContextGroupPriveleges);
   router.post(updateUserProfile, updateUserProfileData);
-
+  router.post(sbUserIds, getSBUserIds);
   router.get('/api/forum/test/user/:userslug', getUserDetails);
 
   router.get('/api/forum/health', healthCheck);
