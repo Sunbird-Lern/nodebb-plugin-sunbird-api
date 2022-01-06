@@ -38,6 +38,7 @@ const privileges = require.main.require('./src/privileges');
 const _ = require('lodash');
 const copyPrivilages = '/api/privileges/v2/copy'
 const getUids = '/api/forum/v2/uids';
+const usersList = '/api/forum/v2/users/details';
 const addUserIntoGroup = '/api/forum/v3/group/membership';
 const groupsPriveleges = '/api/forum/v3/category/:cid/privileges';
 const oidcPlugin = require.main.require('./node_modules/nodebb-plugin-sunbird-oidc/library.js');
@@ -97,15 +98,15 @@ var constants = {
   'emptyDataForGroups':'You have to pass both sbUid and sbUserName',
   'pluginSettings': new Settings('fusionauth-oidc', '1.0.0', {
     // Default settings
-    clientId: null,
-    clientSecret: null,
+    clientId: "",
+    clientSecret: "",
     emailClaim: 'email',
-    discoveryBaseURL: null,
-    authorizationEndpoint: null,
-    tokenEndpoint: null,
-    ssoTokenEndpoint: null,
-    userInfoEndpoint: null,
-    emailDomain: null
+    discoveryBaseURL: "",
+    authorizationEndpoint: "",
+    tokenEndpoint: "",
+    ssoTokenEndpoint: "",
+    userInfoEndpoint: "",
+    emailDomain: ""
   }, false, false),
 }
 
@@ -1217,23 +1218,31 @@ async function getContextGroupPriveleges(req, res) {
   }
 }
 
+async function getUsersDetails(req, res) {
+  const payload = _.get(req.body, 'request');
+  let userList = [];
 
-// async function getCategories(req, res) {
-//   const payload = { ...req.body.request };
-//   const data = await Categories.getAllCategoryFields(['contextId', 'cid'])
-//   const result = data.filter(x => x.contextId === payload.identifier);
-//   res.send(result)
-// }
-
-async function getUserDetails(req, res) {
-  const userslug = req.params.userslug;
-  if (!_.isEmpty(userslug)) {
-    const uid = await Users.getUidByUserslug(userslug);
-    const userDetails = await Users.getUserData(uid);
-    res.send(userDetails);
-  } else {
-    util.generateError(req, res, "Userslug is mandatory", 400);
+  if (payload.uid) {
+    const uids = Array.isArray(payload.uid) ? payload.uid : [payload.uid];
+    userList = await Users.getUsersFields(uids, []);
   }
+
+  if (payload.uids && Array.isArray(payload.uids)) {
+    userList = await Users.getUsersFields(payload.uids, []);
+  }
+
+  if (payload.userslug) {
+    const uid = await Users.getUidByUserslug(payload.userslug);
+    userList = await Users.getUsersFields([uid], []);
+  }
+
+  if (userList.length == 0) {
+    util.generateError(req, res,  jsonConstants.forumStrings.payloadError, 400);
+    return;
+  } 
+
+  const responseObj = await util.responseData(req, res, userList, null);
+  res.send(responseObj);
 }
 
 /**
@@ -1358,9 +1367,9 @@ Plugin.load = function (params, callback) {
   router.post(addUserIntoGroup, addUsers);
   router.post(listOfGroupUsers, getContextUserGroups);
   router.post(groupsPriveleges, getContextGroupPriveleges);
+  router.post(usersList, getUsersDetails);
   router.post(updateUserProfile, updateUserProfileData);
 
-  router.get('/api/forum/test/user/:userslug', getUserDetails);
 
   router.get('/api/forum/health', healthCheck);
 
